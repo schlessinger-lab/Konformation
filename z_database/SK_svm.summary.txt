@@ -1,0 +1,88 @@
+### 18.05.29 ###
+
+## SVN with linear setting for DFG classification
+rfc_dfg = SVC( kernel='linear', decision_function_shape='ovo', probability=True, random_state=0 )
+
+### Evaluate SKlearn ML Model Performance ##
+ # Confusion Matrix:
+[[36  0  1]
+ [ 0 16  0]
+ [ 0  0 12]]
+# Mean Squared Error:
+              precision    recall  f1-score   support
+           0       1.00      0.97      0.99        37
+           1       1.00      1.00      1.00        16
+           2       0.92      1.00      0.96        12
+   micro avg       0.98      0.98      0.98        65
+   macro avg       0.97      0.99      0.98        65
+weighted avg       0.99      0.98      0.98        65
+# Accuracy Score - Oot-of-bag Error:
+98.462 %  -  1.538 %
+
+## SVM with gaussian kernel setting for DFG classification	## Preferred method
+rfc_dfg = SVC( kernel='rbf', decision_function_shape='ovo', probability=True, random_state=0 )
+
+### Evaluate SKlearn ML Model Performance ##
+ # Confusion Matrix:
+[[37  0  0]
+ [ 0 16  0]
+ [ 0  0 12]]
+# Mean Squared Error:
+              precision    recall  f1-score   support
+           0       1.00      1.00      1.00        37
+           1       1.00      1.00      1.00        16
+           2       1.00      1.00      1.00        12
+   micro avg       1.00      1.00      1.00        65
+   macro avg       1.00      1.00      1.00        65
+weighted avg       1.00      1.00      1.00        65
+# Accuracy Score - Oot-of-bag Error:
+100.000 %  -  0.000 %
+
+
+##############################
+
+### SVM with 'linear' setting for full classification	## Preferred method
+rfc = SVC( kernel='linear', decision_function_shape='ovo', probability=True, random_state=0 )
+
+### Evaluate SKlearn ML Model Performance ##
+ # Confusion Matrix:
+[[23  0  1  0  0]
+ [ 0 10  0  0  0]
+ [ 0  0 13  0  0]
+ [ 0  0  0  6  0]
+ [ 0  0  0  0 12]]
+# Mean Squared Error:
+              precision    recall  f1-score   support
+           0       1.00      0.96      0.98        24
+           1       1.00      1.00      1.00        10
+           2       0.93      1.00      0.96        13
+           3       1.00      1.00      1.00         6
+           4       1.00      1.00      1.00        12
+   micro avg       0.98      0.98      0.98        65
+   macro avg       0.99      0.99      0.99        65
+weighted avg       0.99      0.98      0.98        65
+# Accuracy Score - Oot-of-bag Error:
+98.462 %  -  1.538 %
+
+### SVM with 'gaussian kernel' setting for full classification
+rfc = SVC( kernel='rbf', decision_function_shape='ovo', probability=True, random_state=0 )
+
+### Evaluate SKlearn ML Model Performance ##
+ # Confusion Matrix:
+[[23  0  1  0  0]
+ [ 0 10  0  0  0]
+ [ 2  0 11  0  0]
+ [ 0  1  0  5  0]
+ [ 0  0  0  0 12]]
+# Mean Squared Error:
+              precision    recall  f1-score   support
+           0       0.92      0.96      0.94        24
+           1       0.91      1.00      0.95        10
+           2       0.92      0.85      0.88        13
+           3       1.00      0.83      0.91         6
+           4       1.00      1.00      1.00        12
+   micro avg       0.94      0.94      0.94        65
+   macro avg       0.95      0.93      0.94        65
+weighted avg       0.94      0.94      0.94        65
+# Accuracy Score - Oot-of-bag Error:
+93.846 %  -  6.154 %

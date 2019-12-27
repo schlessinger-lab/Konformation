@@ -1,0 +1,10 @@
+
+## Kinase PDB to be determined, listed in an input file
+PDBLIST     input_list
+
+## Has the input PDB structure pre-superposed to 
+## 1ATP_E 'resi 122-138+162-183'?
+SUPERPO     False
+
+
+

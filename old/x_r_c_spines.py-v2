@@ -1,0 +1,133 @@
+#!/usr/bin/python
+
+import re,os,glob,sys
+import numpy as np
+import multiprocessing
+
+from x_helix_axis  import *
+
+
+##########################################################################
+class RCSpines( object ):
+  
+  def __init__( self, ref_r=None, ref_c=None ):
+    self.ref_r = ref_r
+    self.ref_c = ref_c
+
+  def __call__(self, Input):
+    return self.spine_measurement(Input)
+
+#################
+  def spine_measurement( self, Input ):
+
+  # Input_Coords = [pdb_name, H_Crds, N_Crds, C_Crds, G_Crds, R_Crds, T_Crds]
+  #     x_Coords = [resname, resid, bb_crds, ca_crd, cg_crd, avg_crd]  
+
+    # Check for missing residues
+    for idx, R_Seq in enumerate(Input[5]):
+      if R_Seq is None:
+        print('  # R-spine Warning: Missing resid: '+Input[0]+' '+str(idx+1))
+        return None
+    for idx, C_Seq in enumerate(Input[6]):
+      if C_Seq is None:
+        print('  # C-spine Warning: Missing resid: '+Input[0]+' '+str(idx+1))
+        return
+
+    # R-spine calculation: compare each residue average side chain coordinates 
+    # to reference
+
+    Ref = [np.asarray(R_Seq[ArrayCent(len(R_Seq))][5]) for R_Seq in self.ref_r]
+    Rs  = [np.asarray(R_Seq[ArrayCent(len(R_Seq))][5]) for R_Seq in Input[5]]
+
+    Rs_Dist = []
+    for idx, r in enumerate(Ref):
+      dist = Distance( Ref[idx], Rs[idx] )
+      Rs_Dist.append(dist)
+      if dist > 3.0:
+        Residue = Input[5][idx][ArrayCent(len(Input[5][idx]))]
+        print(' # R-spine moved > 3.0A : {0} - Rs{1}: {2}{3}'.format(
+                Input[0], idx, Residue[0], Residue[1] ))
+      
+    r_sp_1, r_sp_2, r_sp_dfg, r_spine = Rs_Dist[0], Rs_Dist[1], Rs_Dist[-1], 'active'
+    if np.sum(Rs_Dist) > 9.0:
+      r_spine = 'inactive'
+#      if   Rs_Dist[1] > 3.0:
+#        r_sp_1 = 'out'
+#      if Rs_Dist[2] > 3.0:
+#        r_sp_2 = 'out'
+      # DFG movement
+#      if Rs_Dist[-1] > 5:
+#        r_sp_dfg = 'out'
+
+
+  # C-spine calculation: use 2nd derivatives to measure curvature of plot
+  # for calculation use either all 7 residues, or only 5 residues, missing 2
+  # that is outside of the "linear" stacking in 1ATP. The order of the residues
+  # are given in the sequence input file
+    Ref = [np.asarray(T_Seq[ArrayCent(len(T_Seq))][5]) for T_Seq in self.ref_c]
+    Cs  = [np.asarray(T_Seq[ArrayCent(len(T_Seq))][5]) for T_Seq in Input[6]]
+    Coords = np.asarray(zip(*Cs))
+
+    Cs_curv_8 = []
+    for x in range(3):
+      m2, n1, c = np.polyfit(range(len(Coords[x])), Coords[x][:], 2, full=False)
+      Cs_curv_8.append(m2*2)
+
+    Cs_curv_6 = []
+    for x in range(3):
+      m2, n1, c = np.polyfit(range(len(Coords[x][:5])), Coords[x][:5], 2, full=False)
+      Cs_curv_6.append(m2*2)
+
+#    print(Cs_curv_6)
+#    print(Cs_curv_8)
+
+    return [Input[0], r_spine, r_sp_1, r_sp_2, r_sp_dfg,
+               Cs_curv_6, Cs_curv_8]
+
+
+##########################################################################
+#
+def RCSpinesMeasure( Ref_Coords, Tgt_Coords, Data, output ):
+
+  # Input_Coords = [pdb_name, H_Crds, N_Crds, C_Crds, G_Crds, R_Crds, T_Crds]
+  #     x_Coords = [resname, resid, bb_crds, ca_crd, cg_crd, avg_crd]  
+
+  # Get the R/C-spine Center
+  pRC = RCSpines(ref_r=Ref_Coords[5], ref_c=Ref_Coords[6])
+  Ref = pRC(Ref_Coords)
+
+  # Create R/C-spine object for MPI
+  mpi = multiprocessing.Pool(processes = multiprocessing.cpu_count())
+
+#  Tmp = [pRC(Tgt) for Tgt in Tgt_Coords]
+  Tmp = mpi.map(pRC, Tgt_Coords)
+  mpi.close()
+  mpi.join()
+
+  # Tgt = [pdb_name, vec, curve, phi, psi, r_median, r_std, Reg2]
+  Tgt_List = [x for x in Tmp if x is not None]
+  print('\n ## R-C Spine return: {0}\n'.format(len(Tgt_List)))
+  CollectSpines(Ref, Tgt_List, Data)
+
+
+##########################################################################
+
+def CollectSpines(Ref, Tgt_List, Data):
+  Tgt_List.append(Ref)
+  for Tgt in Tgt_List:
+    Data[Tgt[0]]['r_spine']  = Tgt[1]
+    Data[Tgt[0]]['r_sp_1']   = Tgt[2]
+    Data[Tgt[0]]['r_sp_2']   = Tgt[3]
+    Data[Tgt[0]]['r_sp_dfg'] = Tgt[4]
+
+    Data[Tgt[0]]['c_sp_6']  = Tgt[5]
+    Data[Tgt[0]]['c_sp_8']  = Tgt[6]
+
+
+##########################################################################
+#
+#   Peter Man-Un Ung @ MSSM
+#
+#   v1.0    17.03.10
+#   v2.0    17.04.12    bugfix; deal with NoneType parameters
+#

@@ -1,0 +1,21 @@
+HELIX	HTLNEKRIL	# [Ref C-Helix | 5,7,9-Resid center on Glu]
+NDOM	AMKIL	# [Ref N-lobe (Lys) 5-Resid] K72
+CDOM	VTDFG	# [Ref N-lobe (Lys) 5-Resid] D184
+RSPINE1	RILQA	# L95
+RSPINE2	VKLEF	# L106
+RSPINE3	LIYRD	# Y164
+RSPINE4	TDFGF	# F185
+CSPINE1	HYAMK	# A70
+CSPINE2	GEMFS	# M128
+CSPINE3	ENLLI	# L172
+CSPINE4	NLLID	# L173
+CSPINE5	YEMAA	# M231
+# CSPINE6 GRVML   # V57   *
+CSPINE6 LLIDQ   # I174  *
+CSPINE7 GVLIY   # L227  *
+GATE	MVMEY	# M120
+
+FASTA	stdy_kinase.clean_3.170311.tcoffee_1d.fasta
+PDBDIR	/home/pmung/xxx_data/1_kinase/1_family/1_stkinase/170109/2_align,/home/pmung/xxx_data/1_kinase/1_family/2_ykinase/170109/2_align
+PDBLIST	align_pdb.stdy-kinase.list
+REFPDB	1atp.pdb

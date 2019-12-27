@@ -1,0 +1,159 @@
+#!/usr/bin/python
+
+import re,os,glob,sys
+import numpy as np
+from x_helix_axis  import *
+from CommonUtility import *
+from aa_residue import AA
+from Bio import SeqIO
+from Bio.PDB.PDBParser import PDBParser
+from Bio.PDB.Polypeptide import PPBuilder
+p = PDBParser(PERMISSIVE=1)
+
+##########################################################################
+## From the input Biopython PDB Object, extract the coordinates and info of
+## 'res_num' rsidues corresponding to the supplied 'Query Sequence'
+def ExtractPDBCoords(PDB, Query_Seq, res_num):
+
+  pdb_id  = PDB.get_id()
+  Res_Obj = PDB.get_residues()
+  print('>> Query Sequence:\t{0} -\t{1}'.format(pdb_id, ''.join(Query_Seq)))
+
+  ## Convert BioPython Residue Object into List of Residues
+  Residues = []
+  for idx, res in enumerate(Res_Obj):
+    if re.search(r"H_|W", res.get_id()[0]): continue
+
+    resname   = res.get_resname()
+    resid     = res.get_id()[1]
+    bb_coords = []
+    # Get the backbone C-alpha coordinates
+    if res.has_id('N'):  bb_coords.append(res['N'].get_coord())
+    if res.has_id('CA'): bb_coords.append(res['CA'].get_coord())
+    if res.has_id('C'):  bb_coords.append(res['C'].get_coord())
+
+    # Get the sidechain vector by averaging the sidechain coordinates and 
+    # calculate the vector from C-alpha to the average coordinates
+    try:
+      ca_coord, sc_vector = SideChainVector(res)
+    except KeyError:
+#      print 'vector error '+pdb_id+' '+resname+str(resid)
+      ca_coord, sc_vector = None, None
+
+
+#    print('{0} {1} {2} {3} {4}'.format(idx,resname,resid,ca_coord,sc_vector))
+    Residues.append([resname, resid, bb_coords, ca_coord, sc_vector])
+
+  # Convert the target sequence into 3-letter AA name. Number of residue
+  # depends on the input sequence length (variable)
+  Target_Seq = [AA(Query_Seq[i]) for i in range(0, res_num)]
+
+  # Iterate through the entire protein sequence and match the sequence to
+  # the entire target sequence AA in 'Target_Seq' (vary in length)
+  Found, matched = [], False
+  for idx, residue in enumerate(Residues):
+    # If the current position is reaching the end of the sequence and
+    # only 'res_num' residue away, meaning won't have the exact  matching
+    # to the 'Target_Seq', break the search
+    if (idx + res_num-1) >= len(Residues):
+      break
+
+    Found = []
+    # If found a match, check the next residue for next in 'Target_Seq'
+    # until matching all 'Target_Seq'
+    for step in range(0, res_num):
+      if Residues[idx+step][0] == Target_Seq[step]:
+        Found.append(Residues[idx+step])
+#        print Residues[idx+step][0]+str(Residues[idx+step][1])
+      else:
+        break   # If no matching, break search and step to next residue
+
+    if len(Found) == res_num:
+      matched = True
+      break
+    else:
+      continue
+
+  # If no matching sequence is found, return None
+  if matched is False:
+    print('## Cannot find in\t{0}'.format(pdb_id))
+    return None
+  else:
+    print(' Matched sequence in\t{0} -\t{1}-{3}-{2}'.format(
+           pdb_id, Found[0][1], Found[-1][1],
+           ''.join([AA(Found[i][0]) for i in range(0,len(Found))])
+           ,Found ) )
+    return Found
+
+
+##########################################################################
+## Calculate the CA-to-(sidechain average) vector
+def SideChainVector(res):
+  ca_coord  = res['CA'].get_coord()
+  sc_coords = []
+  for atom in res:
+    # ignore mainchain atoms
+    if atom.get_name() != 'C':
+      if not re.search(r'CA|N|O', atom.get_name()):
+        sc_coords.append(res[atom.get_name()].get_coord())
+
+  if len(sc_coords) > 0:    # if not Glycine
+#    avg_coord = [sum(atom) / len(atom) for atom in zip(*sc_coords)] 
+    avg_coord = np.mean(sc_coords, axis=0)
+    sc_vector = np.asarray(avg_coord - ca_coord)
+  else:
+    sc_vector = np.asarray(None)
+
+  return ca_coord, sc_vector
+
+
+##########################################################################
+def CheckSequence(Seq):
+  for resid in Seq:
+    if resid == '-':
+      return False
+  return True
+
+##########################################################################
+## Get the sequence from the reference PDB file
+def RefFastaColumn(Fasta_Lib, residues, name):
+
+  seq, Set = '', {}
+  for seq_record in Fasta_Lib:
+    if re.search(r'{0}'.format(name), seq_record.id.replace(':','_')):
+      seq = str(seq_record.seq)
+
+  # Find the sequence by the 5/7-resid code in (D-2,D-1,D,D+1,D+2) format
+  # but refer the column by the center residue 'D'
+  Match  = re.finditer(r'{0}'.format(residues), seq)
+  for m in Match:
+    column = m.start(0)
+#  Set[name.split('.')[0]] = list(residues)
+  print(' reference sequence:\t'+residues)
+  print(' Column in Fasta:\t'+str(column+1))  # convert from 'start 0' to 1
+  return residues, column
+
+
+##########################################################################
+## Read from alignment FASTA. Find the position of the search pattern in the 
+## sequence and make a new sequence, with the residue before the input sequence
+## plus the first two residues in the input sequence.
+## ** Make sure no 'blank' residue in fasta library in that region
+def FastaFromColumn(Fasta_Lib, column, res_num):
+  Set    = {}
+  for seq_record in Fasta_Lib:
+    # Since all query sequences are aligned, the column numbers should 
+    # correspond to the correct helix in query sequences
+    seq    = str(seq_record.seq)
+    Qu_Seq = [seq[column+i] for i in range(0, res_num)]
+    pdb_id = seq_record.id.split('|')[0]
+    Set[pdb_id.replace(':','_')] = Qu_Seq
+  return Set
+
+
+#########################################################################
+#
+#   Peter M.U. Ung  @ MSSM
+#   
+#   v0.1    17.01.28
+#   v0.2    

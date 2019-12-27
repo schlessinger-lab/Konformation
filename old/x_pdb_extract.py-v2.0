@@ -1,0 +1,328 @@
+#!/usr/bin/python
+
+import re,os,glob,sys
+import numpy as np
+from x_helix_axis  import *
+from x_fasta_parse import *
+from x_dfg_torsion import *
+from CommonUtility import *
+from aa_residue import AA
+from Bio import SeqIO
+from Bio.PDB.PDBParser import PDBParser
+from Bio.PDB.Polypeptide import PPBuilder
+p = PDBParser(PERMISSIVE=1)
+
+##########################################################################
+class ParsePDB(object):
+
+  def __init__( self, h_seq=None, n_seq=None, c_seq=None,
+                      g_seq=None, r_seq=None, t_seq=None,
+                      pdb_dir='./', corr={}   ):
+    self.h_seq   = h_seq    # Helix sequence, [1]
+    self.n_seq   = n_seq    # N-dom sequence, [1]
+    self.c_seq   = c_seq    # C-dom sequence, [1]
+    self.g_seq   = g_seq    # Gate sequence, [1]
+
+    self.r_seq   = r_seq    # R-spine sequences, [4]
+    self.t_seq   = t_seq    # C-spine sequences, [8]
+    self.pdb_dir = pdb_dir
+    self.corr    = corr     # sequence correction list
+
+  def __call__(self, inp):
+    return self.extract_pdb(inp)
+
+########################################################
+  def extract_pdb( self, inp ):
+  
+
+    with open('_TEMP.'+inp, 'wh') as missing:
+      pdb_name = inp.split('.')[0]
+      print('>>> Current PDB: '+pdb_name)
+
+      # Skip if protein is not found in fasta library or sequence has blank 
+      # residue '-' in the sequence
+      if pdb_name not in self.h_seq:
+        print('  # PDB Warning: Cannot find in FASTA library: '+pdb_name)
+        return None
+      if CheckSequence( self.h_seq[pdb_name] ) is False:
+        print('  # PDB Warning: FASTA has missing residue: {0} - {1}'.format(
+              pdb_name, str(self.h_seq[pdb_name]) ))
+        return None
+
+      try:
+        pdb_path = glob.glob('{0}/{1}'.format(self.pdb_dir, inp.rstrip()))[0]
+      except IndexError:
+        print('  # PDB Warning: PDB not available in library: '+inp)
+        return None
+
+      pdb_obj = p.get_structure(pdb_name, pdb_path)
+      H_Crds = ExtractPDBCoords( pdb_obj, self.h_seq[pdb_name] )
+      N_Crds = ExtractPDBCoords( pdb_obj, self.n_seq[pdb_name] )
+      C_Crds = ExtractPDBCoords( pdb_obj, self.c_seq[pdb_name] )
+      G_Crds = ExtractPDBCoords( pdb_obj, self.g_seq[pdb_name] )
+      
+      R_Crds = [ExtractPDBCoords(pdb_obj, seq[pdb_name]) for seq in self.r_seq]
+      T_Crds = [ExtractPDBCoords(pdb_obj, seq[pdb_name]) for seq in self.t_seq]
+
+
+      # If the coordinates collection failed in the previous step, check
+      # if correction data for failed residues is available for replacement,
+      # otherwise output as None and ignore this PDB in future calculations
+      # and marked as missing in an output file
+      if H_Crds is None:
+        if pdb_name in self.corr and self.corr[pdb_name][0] is not None:
+          H_Crds = self.corr[pdb_name][0]
+          print('# Accepted coordinates correction: '+pdb_name+' Helix')
+        else:
+          missing.write(inp+'|Helix|'+''.join(self.h_seq[pdb_name])+'\n')
+          return None
+      if N_Crds is None:
+        if pdb_name in self.corr and self.corr[pdb_name][1] is not None:
+          N_Crds = self.corr[pdb_name][1]
+          print('# Accepted coordinates correction: '+pdb_name+' N_dom')
+        else:
+          missing.write(inp+'|N_dom|'+''.join(self.c_seq[pdb_name])+'\n')
+          return None
+      if C_Crds is None:
+        if pdb_name in self.corr and self.corr[pdb_name][2] is not None:
+          C_Crds = self.corr[pdb_name][2]
+          print('# Accepted coordinates correction: '+pdb_name+' C_dom')
+        else:
+          missing.write(inp+'|C_dom|'+''.join(self.c_seq[pdb_name])+'\n')
+          return None
+      if G_Crds is None:
+        if pdb_name in self.corr and self.corr[pdb_name][3] is not None:
+          G_Crds = self.corr[pdb_name][3]
+          print('# Accepted coordinates correction: '+pdb_name+' Gate')
+        else:
+          missing.write(inp+'|Gate|'+''.join(self.g_seq[pdb_name])+'\n')
+          return None
+
+      for idx, Rs in enumerate(R_Crds):
+        if Rs is None:
+          x = str(idx + 1)
+          if pdb_name in self.corr and self.corr[pdb_name][idx+4] is not None:
+            R_Crds[idx] = self.corr[pdb_name][idx+4]
+            print('# Accepted coordinates correction: '+pdb_name+' Rs'+x)
+          else:
+            missing.write(inp+'|Rs'+x+'|'+''.join(self.r_seq[idx][pdb_name])+'\n')
+            return None
+
+      for idx, Cs in enumerate(T_Crds):
+        if Cs is None:
+          x = str(idx + 1)
+          if pdb_name in self.corr and self.corr[pdb_name][idx+8] is not None:
+            T_Crds[idx] = self.corr[pdb_name][idx+8]
+            print('# Accepted coordinates correction: '+pdb_name+' Cs'+x)
+          else:
+            missing.write(inp+'|Cs'+x+'|'+''.join(self.t_seq[idx][pdb_name])+'\n')
+            return None
+
+
+      return [pdb_name, H_Crds, N_Crds, C_Crds, G_Crds, R_Crds, T_Crds]
+
+
+##########################################################################
+## From the input Biopython PDB Object, extract the coordinates and info of
+## 'res_num' rsidues corresponding to the supplied 'Query Sequence'
+def ExtractPDBCoords( PDB, Query_Seq ):
+
+  # Quit searching if None is provided
+  if Query_Seq is None:
+    return None
+
+  res_num = len(Query_Seq)
+  pdb_id  = PDB.get_id()
+  Res_Obj = PDB.get_residues()
+  print('>> Query Sequence:\t{0} -\t{1}'.format(pdb_id, ''.join(Query_Seq)))
+
+  ## Convert BioPython Residue Object into List of Residues
+  Residues = []
+  for res in Res_Obj:
+    if re.search(r"H_|W", res.get_id()[0]): continue
+
+    resname   = res.get_resname()
+    resid     = res.get_id()[1]
+    bb_crds, ca_crd, cg_crd, avg_crd = ResidueCoords(res)
+
+    Residues.append( [ resname, resid, bb_crds, ca_crd, cg_crd, avg_crd ])
+ 
+  # Convert the target sequence into 3-letter AA name. Number of residue
+  # depends on the input sequence length (variable)
+  Target_Seq = [AA(Query_Seq[i]) for i in range(res_num)]
+
+  ##############################3
+  # At least 5 residues are needed for a positive match
+  while ( len(Target_Seq) >= 5 ):
+    res_num = len(Target_Seq)
+    # Iterate through the entire protein sequence and match the sequence to
+    # the entire target sequence AA in 'Target_Seq' (vary in length)
+    Found, matched = [], False
+    for idx, residue in enumerate(Residues):
+      # If the current position is reaching the end of the sequence and
+      # only 'res_num' residue away, meaning won't have the exact matching
+      # to the 'Target_Seq', break the search
+      if (idx + res_num-1) >= len(Residues):
+        break
+
+      Found = []
+      # If found a match resname, check the next residue for next in 
+      # 'Target_Seq' until matching all resnames in 'Target_Seq'
+      for step in range(res_num):
+        if Residues[idx+step][0] == Target_Seq[step]:
+          Found.append(Residues[idx+step])
+#            print Residues[idx+step][0]+str(Residues[idx+step][1])
+        else:
+          break   # If no match, break search and step to next residue
+
+      if len(Found) == res_num:
+        matched = True
+        break
+      else:
+        continue
+
+    # If no matching sequence is found after moving thru the entire protein,
+    # run it one more time with truncation of 1 residue on both ends
+    # if failed after rerun with 5 total residues, return None
+    #
+    # [ resname, resid, bb_crds, ca_crd, cg_crd, avg_crd ]
+    if matched is False:
+      Trunc_Seq  = Target_Seq[1:-1]
+      Target_Seq = Trunc_Seq
+      if len(Target_Seq) <= 3:
+        print('  # PDB Warning: Cannot find in\t{0}'.format(pdb_id))
+        return None
+      else:
+        print('## PDB: Cannot find match in {0}. Shortened to {1}'.format(
+               pdb_id, len(Target_Seq) ) )
+    else:
+      print(' Matched sequence in\t{0} -\t{1}-{3}-{2}'.format(
+             pdb_id, Found[0][1], Found[-1][1],
+             ''.join([AA(Found[i][0]) for i in range(0,len(Found))])  ) )
+      return Found
+
+
+##########################################################################
+## Optional file contain correction for PDBs that have missing residues in
+## the sequence matching region. Run thru the program first to identify
+## which PDB has what missing. The correction residues should be in N-CA-C
+## order and center on the key residues only
+##   Format of corrected file: correct.<PDB file> -->correct.1ATP_E.1atp.pdb
+def CoordCorrect( option, pdb_dir ):
+
+  dic = {}
+  if option is None: return dic
+
+  with open(option, 'r') as fi:
+    for l in fi:
+      pdb_file, typ, seq = l.split('|')
+      pdb_name = pdb_file.split('.')[0]
+
+      try:
+        pdb_path = glob.glob('{0}/correct.{1}.{2}'.format(
+                              pdb_dir, typ, pdb_file))[0]
+      except IndexError:
+        print('# No correction for {0} : {1}'.format(pdb_name, typ))
+        continue
+      px      = p.get_structure(pdb_name, pdb_path)
+      All_Res = px.get_residues()
+
+      Residue = []
+      for res in All_Res:
+        resname = res.get_resname()
+        resid   = res.get_id()[1]
+        bb_crds, ca_crd, cg_crd, avg_crd = ResidueCoords(res)
+        Residue.append( [resname, resid, bb_crds, ca_crd, cg_crd, avg_crd] )
+
+      # Put correction data into separated arrays,
+      # [Helix, N-Dom, C-Dom, Gate, Rs1, Rs2, Rs3, Rs4, 
+      #  Cs1, Cs2, Cs3, Cs4, Cs5, Cs6, Cs7, ]
+      if pdb_name not in dic:
+        dic[pdb_name] = [None, None, None, None, None, None, None, None,
+                         None, None, None, None, None, None, None, ]
+
+      if   typ == 'Helix': dic[pdb_name][0] = Residue
+      elif typ == 'N_dom': dic[pdb_name][1] = Residue
+      elif typ == 'C_dom': dic[pdb_name][2] = Residue
+      elif typ == 'Gate':  dic[pdb_name][3] = Residue
+      elif typ == 'Rs1':   dic[pdb_name][4] = Residue
+      elif typ == 'Rs2':   dic[pdb_name][5] = Residue
+      elif typ == 'Rs3':   dic[pdb_name][6] = Residue
+      elif typ == 'Rs4':   dic[pdb_name][7] = Residue
+      elif typ == 'Cs1':   dic[pdb_name][8] = Residue
+      elif typ == 'Cs2':   dic[pdb_name][9] = Residue
+      elif typ == 'Cs3':   dic[pdb_name][10] = Residue
+      elif typ == 'Cs4':   dic[pdb_name][11] = Residue
+      elif typ == 'Cs5':   dic[pdb_name][12] = Residue
+      elif typ == 'Cs6':   dic[pdb_name][13] = Residue
+      elif typ == 'Cs7':   dic[pdb_name][14] = Residue
+#      elif typ == 'Cs8':   dic[pdb_name][15] = Residue
+
+  return dic
+
+
+##########################################################################
+## Extract the coordinates of the residue -- backbone N,CA,C, CA, and average
+## of sidechain from CB
+def ResidueCoords( res ):
+  
+  bb_coords = []
+  # Coordinates of backbone atoms N,CA,C, and CA atom
+  if res.has_id('N'):  bb_coords.append(res['N'].get_coord())
+  if res.has_id('CA'): bb_coords.append(res['CA'].get_coord())
+  if res.has_id('C'):  bb_coords.append(res['C'].get_coord())
+
+  sc_coords = []
+  # Average Coordinates of sidechain atoms
+  for atom in res:
+    if not re.search(r'CA| N | O ', atom.get_name()):
+      sc_coords.append(res[atom.get_name()].get_coord())
+  avg_coord = np.mean(sc_coords, axis=0)
+
+  # get the CG atom; if not, the next one (DFG vector calculation)
+  if   res.has_id('CA'): ca_coord = res['CA'].get_coord()
+  else:                  ca_coord = None
+  if   res.has_id('CG'): cg_coord = res['CG'].get_coord()
+  elif res.has_id('CB'): cg_coord = res['CB'].get_coord()
+  else:                  cg_coord = None
+
+  return bb_coords, ca_coord, cg_coord, avg_coord
+
+
+##########################################################################
+## Calculate the normalized CA-to-(sidechain average) vector
+def SideChainVector(res):
+  ca_coord = res['CA'].get_coord()
+  # get the CG atom; if not, the next one (DFG vector calculation)
+  if   res.has_id('CG'): cg_coord = res['CG'].get_coord()
+  elif res.has_id('CB'): cg_coord = res['CB'].get_coord()
+  else:                  cg_coord = None
+
+  sc_coords = []
+  for atom in res:
+    # ignore mainchain atoms, only get side chain residues (sidechain vector)
+    if atom.get_name() != 'C':
+      if not re.search(r'CA|N|O', atom.get_name()):
+        sc_coords.append(res[atom.get_name()].get_coord())
+
+  # Generate normal vector for sidechain
+  if len(sc_coords) > 0:    # if not Glycine
+#    avg_coord = [sum(atom) / len(atom) for atom in zip(*sc_coords)] 
+    avg_coord = np.mean(sc_coords, axis=0)
+    sc_vector = np.asarray(avg_coord-ca_coord)/VecMag(avg_coord-ca_coord)
+  else:
+    sc_vector = None
+
+  return ca_coord, cg_coord, sc_vector
+
+
+##########################################################################
+#
+#   Peter M.U. Ung  @ MSSM
+#   
+#   v0.1    17.01.30
+#   v0.2    17.02.01
+#   
+#   v1.0    17.02.02
+#   v2.0    17.03.10
+#

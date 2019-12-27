@@ -1,0 +1,260 @@
+#!/usr/bin/python
+
+import re,os,glob,sys
+import numpy as np
+from sympy import *
+import multiprocessing
+from CommonUtility import *
+from aa_residue import AA
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D, axes3d
+from Bio import SeqIO
+from Bio.PDB.PDBParser import PDBParser
+from Bio.PDB.Polypeptide import PPBuilder
+p = PDBParser(PERMISSIVE=1)
+np.seterr(invalid='ignore')
+
+##########################################################################
+def HelixAxis( Input ):
+  pdb_name, Pre_Coords = Input[0:2]
+  try:
+    Coords = np.asarray( sum(zip(*Pre_Coords)[2],[]) )  # backbone atoms, N,CA,C
+  except TypeError:
+    print 'xcvasvsd '+pdb_name
+    print Pre_Coords
+    return None
+
+  # Calculate helix normal vector and helix center line (regression),
+  # Calculate helix radii over the length
+  # Calculate spherical angles of 1st-order helix axis and compare
+
+  vec, curve, Reg1, Reg2 = CalculateHelixAxis(Coords)
+  phi, psi = SphericalAngles(vec)
+  r_median, r_std = HelixRadius(Coords, Reg2, pdb_name)
+#  TfReg1 = TransformVectorPoints(Reg1, phi, psi)
+
+  return [pdb_name, vec, curve, phi, psi, r_median, r_std, Reg1, Reg2]
+
+
+##########################################################################
+## Compare the Helix axis and distance between the Reference and Target axes
+def HelixMeasurements(Ref_Coords, Tgt_Coords):
+  # Ref_Coords = [pdb_name, Ref_H_Coords, Ref_N_Coords, Ref_C_Coords]
+  mpi = multiprocessing.Pool(processes = multiprocessing.cpu_count())
+
+
+  # Create helix object for MPI 
+  Ref      = HelixAxis(Ref_Coords)
+  Tgt_List = mpi.map(HelixAxis, Tgt_Coords)
+  mpi.close()
+  mpi.join()
+
+  Tgt_Correct = [x for x in Tgt_List if x is not None]
+  # { [name, vec, curve, phi, psi, r_median, r_std, Reg1, Reg2, TfReg1] }
+  print ''
+  for Itms in Tgt_Correct:
+    print('{0} d(Phi:Psi) = {1:6.2f} - {2:6.2f}'.format( Itms[0],
+           (Ref[3] - Itms[3]), (Ref[4] - Itms[4]) ))
+
+  return 0
+
+
+#########################################################################
+#########################################################################
+## Calculate the helix axis using coordinates supplied, calculate 1st- and 2nd-
+## order regression curves to represent helix axis. Calculate the helix 
+## curvature centering at conserved Glu
+def CalculateHelixAxis(Input):
+  Coords = np.asarray(Input)
+  count  = len(Coords)
+
+  # Find the center element in an array; since input should be odd number
+  if count % 2 == 0: center = count/2
+  else:              center = ((count-1)/2)+1
+
+  # Linear regression on Cartesian Coordinates to estimate helix axis coords.
+  # Use moving sets of points on both end to average out regression error
+  # iterate range(3) to calculate x,y,z coordinates separately
+  posit  = 6                # 3 atoms (N,C,CA) = 1 residue
+  xcount = count - posit    # reduced number of points to do LSQ
+  Fn1Pts, Fn2Pts  = [], []
+  for m in range(0,posit):
+    Fn1 = [LsqFit(range(xcount), Coords[m:m-posit, x],1) for x in range(3)]
+    Fn1Pts.append( [np.asarray([f(x) for f in Fn1]) for x in range(count) ])
+    Fn2 = [LsqFit(range(xcount), Coords[m:m-posit, x],2) for x in range(3)]
+    Fn2Pts.append( [np.asarray([f(x) for f in Fn2]) for x in range(count) ])
+  Reg1 = np.mean(Fn1Pts, axis=0)
+  Reg2 = np.mean(Fn2Pts, axis=0)
+  Start, End, Center = Reg1[0], Reg1[-1], Reg2[center]
+
+  h_vec   = (End-Start)/VectorMag(End-Start)
+  h_curve = VectorAngle( (Center-Start), (End-Center) )
+#  print('Helix curve: {0}'.format(h_curve))
+
+  return h_vec, h_curve, Reg1, Reg2
+
+
+##########################################################################
+## Calculate the spherical angles of a vector relative to z-axis
+## Phi as angle (y-axis); Psi as dihedral angle (z-axis) between 2 vectors
+def SphericalAngles(vec):
+  
+  # phi for vector to xz-plane/x_axis angle
+  x_axis = [1,0,0] 
+  norm   = VectorMag([vec[0],vec[1],0])
+  phi    = np.arccos(np.dot([vec[0],vec[1],0], x_axis)/norm)*180/np.pi
+
+  # psi for vector to yz-plane/z-axis angle
+  z_axis = [0,0,1]
+  h_norm = VectorMag(vec)
+  psi    = np.arccos(np.dot(vec/norm, z_axis)/norm)*180/np.pi
+#  print('Phi, Psi: {0}\t{1}'.format(phi, psi))
+  return phi, psi
+
+
+##########################################################################
+## Calculate average radius of helix using 2nd-order regression as helix center
+def HelixRadius(Coords, Reg2Pts, infile):
+  count = len(Coords)
+
+  if count != len(Reg2Pts):
+    sys.exit('no. of regression points does not match number of coord points')
+  # Cylindrical coodinates of helix
+  Dist  = [VectorMag(Coords[i]-Reg2Pts[i]) for i in range(count)]
+  d     = np.poly1d(np.polyfit(range(count), Dist, 1, full=False))
+  median, stdev = np.median(Dist), np.std(Dist)
+#  print('Helix radius: {0:4.2f} +- {1:4.2f}'.format(median, stdev))
+
+  figure = False
+  if figure:
+    fig = plt.figure()
+    ax  = fig.gca()
+    ax.set_title('Radii along Helix: '+infile)
+    ax.set_xlabel('Helix Atom')
+    ax.set_ylabel('Radius (A)')
+    ax.set_xlim(0,count)
+    ax.set_ylim(0,4)
+    ax.grid()
+    ax.plot(range(count), Dist, 'r-')
+    ax.plot(range(count), [d(x) for x in range(count)], 'k-')
+    text = 'median: {0:4.2f} $\pm$ {1:4.2f}'.format(median, stdev)
+    props = dict(boxstyle='round', facecolor='white')
+    ax.text(0.9,0.2, text, fontsize=16, verticalalignment='bottom', bbox=props)
+    fig.savefig(infile+'.rad.png')
+
+  return median, stdev
+
+
+##########################################################################
+## Transform the helix axis points to origin and then z-axis by 2 rotations
+def TransformVectorPoints(RegPts, phi, psi):
+
+  tf_coeff = TransformAxis('z', phi)*TransformAxis('y', psi)
+
+  return [Matrix(1,3, list(pt-RegPts[0]))*tf_coeff for pt in RegPts]
+
+
+##########################################################################
+## Draw target and reference helix axes onto YZ-plane, assuming reference
+## helix axis (1ATP) approximate (0,Y,Z)
+##
+## lots of issues with transforming the axes with the matrix (should be z-y 
+## axis, but for 1atp (z-x) is needed) and the calculated new positions are
+## not consistent. 1ATP will work to (x,0,0) after transformation, but other
+## kinases can be anywhere. Perhaps better to just compare the angles than
+## moving the helix axis for visual
+def DrawAxis2D(Pts1, Pts2, infile):
+  for pt in Pts1:
+    x = map(float,list(pt))
+    print('{0:6.2f} {1:6.2f} {2:6.2f}'.format(x[0],x[1],x[2]))
+  for pt in Pts2:
+    x = map(float,list(pt))
+    print('{0:6.2f} {1:6.2f} {2:6.2f}'.format(x[0],x[1],x[2]))
+
+  fig = plt.figure()
+  ax =fig.gca()
+  ax.plot(zip(*Pts1)[1],zip(*Pts1)[2], 'g-')
+  ax.plot(zip(*Pts2)[1],zip(*Pts2)[2], 'r-')
+  ax.legend([p1,p2],['Ref', infile])
+  ax.set_xlim(-5,15)
+  ax.set_ylim(-10,10)
+  ax.set_title('YZ-plane: Ref -- '+infile)
+  ax.set_xlabel('Y axis')
+  ax.set_ylabel('Z axis')
+  ax.grid()
+  fig.savefig(infile+'.png')
+
+
+##########################################################################
+## n-order Least-square fit of 2 arrays, x and y, return 1st and last points
+def LsqFit( X, Y, order=1 ):
+  return np.poly1d( np.polyfit( X, Y, order, full=False))
+
+
+##########################################################################
+# Find the center element in an array
+def ArrCent( count ):
+  if count % 2 == 0: center = count/2
+  else:              center = ((count-1)/2)+1
+  return center
+
+
+##########################################################################
+# Basic elemental rotation about one of the axes to put a vector by an "angle"
+# about the x, y, or z axis, using the right-hand rule (anticlockwise rotation)
+def TransformAxis(rotate_axis, angle):
+  # Rotate X-axis to put vector onto XY-plane
+  if re.search(r'x', rotate_axis, re.IGNORECASE):
+    Tf = Matrix([ [ 1,       0,            0      ],
+                  [ 0, np.cos(angle), -sin(angle) ],
+                  [ 0, np.sin(angle),  cos(angle) ] ])
+
+  # Rotate Y-axis to put vector onto YZ-plane
+  if re.search(r'y', rotate_axis, re.IGNORECASE):
+    Tf = Matrix([ [ np.cos(angle), 0, np.sin(angle) ],
+                  [       0,       1,      0        ],
+                  [-np.sin(angle), 0, np.cos(angle) ] ])
+
+  # Rotate Z-axis to put vector onto XZ-plane
+  if re.search(r'z', rotate_axis, re.IGNORECASE):
+    Tf = Matrix([ [ np.cos(angle), -np.sin(angle), 0 ],
+                  [ np.sin(angle),  np.cos(angle), 0 ],
+                  [       0,             0,        1 ] ])
+  return Tf
+
+
+##########################################################################
+## Magnitude of a vector
+def VectorMag( v ):
+#  mag = math.sqrt( v[0]**2 + v[1]**2 + v[2]**2 )
+  mag = np.sqrt((np.array(v)**2).sum(-1))
+#  mag = np.linalg.norm( v )
+  return mag
+
+## Angle between vectors
+def VectorAngle( v1, v2 ):
+  ang = np.arccos( np.dot(v1,v2)/(VectorMag(v1)*VectorMag(v2)) ) * 180/np.pi
+  return ang
+
+## Distance between 2 points
+def Distance( v1, v2 ):
+  return VectorMag( v2 - v1 )
+
+## Distance between vectors
+def VectorDistance(start1, v1, start2, v2):
+  cross_prod = np.cross(v1,v2)
+  mx         = VectorMag(cross_prod)
+  norm       = corss_prod/mx
+  diff       = start1 - start2
+  dist       = np.fabs( np.dot(norm,diff) )
+  return dist
+
+##########################################################################
+##
+##  Peter M.U. Ung  @   MSSM
+##
+##  v0.1    17.01.08
+##  v      
+##
+##########################################################################

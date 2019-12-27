@@ -1,0 +1,75 @@
+################# 19.05.27 ###############
+
+** 
+** df_train, df_test = train_test_split(df, train_size=0.8, random_state=0, shuffle=True)
+
+### DFG model ### SK_rf_model_dfg.190527.pkl.bz2
+** rfc_dfg = RandomForestClassifier( n_estimators=1000, bootstrap=True,n_jobs=multiprocessing.cpu_count()  )
+
+### Evaluate SKlearn Random Forest Performance ##
+ # Confusion Matrix:
+     di do wc
+di [[36  0  0]
+do  [ 0 21  0]
+wc  [ 0  1  7]]
+
+# Mean Squared Error:
+              precision    recall  f1-score   support
+
+           0       1.00      1.00      1.00        36
+           1       0.95      1.00      0.98        21
+           2       1.00      0.88      0.93         8
+
+   micro avg       0.98      0.98      0.98        65
+   macro avg       0.98      0.96      0.97        65
+weighted avg       0.99      0.98      0.98        65
+
+
+# Accuracy Score - Oot-of-bag Error:
+98.462 %  -  1.538 %
+
+# Feature importance:
+ p1p1x      - 29.11
+ p2p2x      - 31.78
+ r3r3x      - 32.17
+ dist_NH    - 2.40
+ dist_CH    - 4.54
+
+
+** rfc = RandomForestClassifier( n_estimators=1000, bootstrap=True, n_jobs=multiprocessing.cpu_count()  )
+
+### DFG/Chelix model ### SK_rf_model_full.190527.pkl.bz2
+### Evaluate SKlearn Random Forest Performance ##
+ # Confusion Matrix:
+       ii io oi oo  w
+cidi [[23  0  1  0  0]
+cido  [ 0 10  0  0  0]
+codi  [ 0  0 13  0  0]
+codo  [ 0  0  0  6  0]
+wcd   [ 0  1  0  0 11]]
+
+# Mean Squared Error:
+              precision    recall  f1-score   support
+
+           0       1.00      0.96      0.98        24
+           1       0.91      1.00      0.95        10
+           2       0.93      1.00      0.96        13
+           3       1.00      1.00      1.00         6
+           4       1.00      0.92      0.96        12
+
+   micro avg       0.97      0.97      0.97        65
+   macro avg       0.97      0.97      0.97        65
+weighted avg       0.97      0.97      0.97        65
+
+
+# Accuracy Score - Oot-of-bag Error:
+96.923 %  -  3.077 %
+
+# Feature importance:
+ h_cgvc     - 11.02
+ ang_NHs    - 10.19
+ ang_CHs    - 6.10
+ dist_NH    - 14.02
+ dist_CH    - 18.48
+ dfg_conf   - 40.19
+#######################################################################

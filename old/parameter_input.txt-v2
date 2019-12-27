@@ -1,0 +1,52 @@
+
+
+## All kinase PDB in PDBDIR to be determined
+PDBLIST align_pdb.stdy-kinase.list
+
+
+## Directory with all superposed PDBs for examination
+PDBDIR	/home/pmung/xxx_data/1_kinase/1_family/1_stkinase/170109/2_align
+#,/home/pmung/xxx_data/1_kinase/1_family/2_ykinase/170109/2_align
+
+
+## Directory with residue PDB missing in the first PDB parsing
+MISSING	/home/pmung/xxx_data/1_kinase/1_family/1_stkinase/170109/3_result/stdy_kinase.param.170825.missing.root.txt
+
+
+## FASTA library of all PDBs found in the PDB directory
+FASTA	stdy_kinase.clean_3.170714.tcoffee_1d.fasta
+
+
+## Reference PDB structure - default. 1atp.pdb
+REFPDB  1atp.pdb
+
+
+## Reference residue sequence in '1atp.pdb' as recognition site
+# Always an odd number of residues (3, 5, 7, 9), where recognition residue
+# is flanked by residues on both sides (at least 5 residues for uniqueness)
+HELIX	HTLNEKRIL	# [Ref C-Helix | 5,7,9-Resid center on Glu, E91]
+NDOM	AMKIL	# [Ref N-lobe (Lys) 5-Resid] K72
+CDOM	VTDFG	# [Ref N-lobe (Lys) 5-Resid] D184
+GATE	MVMEY	# Gatekeeper M120
+RSPINE1 VKLEF   # L106 R-spine
+RSPINE2 RILQA   # L95
+RSPINE3 TDFGF   # F185
+RSPINE4 LIYRD   # Y164
+CSPINE1 HYAMK   # A70  C-spine
+CSPINE2 NLLID   # L173
+CSPINE3 ENLLI   # L172
+CSPINE4 GEMFS   # M128
+CSPINE5 YEMAA   # M231
+# CSPINE6 GRVML   # V57   * somewhat outside of linearity
+# CSPINE6 LLIDQ   # I174  *
+# CSPINE7 GVLIY   # L227  *
+
+
+## Partial list of kinase PDB in PDBDIR to be studied used during testing
+#PDBLIST        x_known_c-in_d-out.txt
+#PDBLIST        x_known_c-in_d-in.txt
+#PDBLIST        x_known_c-out_d-in.txt
+#PDBLIST        x_known_c-in_d-out.txt
+#PDBLIST        x_known_c-out_d-out.txt
+#PDBLIST        badones.input.list
+#PDBLIST        reallybadones.input.list

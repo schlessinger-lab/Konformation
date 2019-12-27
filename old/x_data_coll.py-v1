@@ -1,0 +1,86 @@
+#!/usr/bin/python
+
+import sys,os,re
+import numpy as np
+from CommonUtility import *
+from sklearn import metrics
+from sklearn.cluster import DBSCAN
+from sklearn.preprocessing import StandardScaler
+
+##########################################################################
+def BuildDataSet():
+  return { 
+           'pdb_id':None,
+           'h_phi':None,   'h_psi':None,   'h_curv':None,
+           'h_ca':None,    'h_cg':None,
+           'n_ca':None,    'c_ca':None,
+           'n_phi':None,   'n_psi':None,
+           'c_phi':None,   'c_psi':None,
+           'dist_NH':None, 'dist_NC':None, 'dist_CH':None,
+           'ang_NHs':None, 'ang_CHs':None,
+           'r_medi':None,  'r_std':None,
+           'g_resi':None,  'g_coord':None,
+           'p1p1x':None,   'p2p2x':None,   'dfg_st':None,
+           'r_spine':None, 'c_spine':None, 
+         }
+
+
+################################################
+def Data2Pandas(Data, output):
+  import pandas as pd
+#  import xlsxwriter
+
+  df = pd.DataFrame.from_dict(Data, orient='index')
+  df.index.name = 'pdb_id'
+  
+  columns = ['pdb_id','h_phi','h_psi','h_curv','h_ca','h_cg',
+             'n_ca','c_ca','n_phi','n_psi','c_phi','c_psi',
+             'dist_NH','dist_NC','dist_CH','ang_NHs','ang_CHs',
+             'r_medi','r_std','g_resi','g_coord',
+             'p1p1x','p2p2x','dfg_st','r_spine', 'c_spine',]
+
+#  df.set_option('precision', 4)
+  df.to_string(formatters={'r_medi':'{:,.4f}'.format})
+  df.to_string(formatters={'r_std':'{:,.4f}'.format})
+  df.to_string(formatters={'p1p1x':'{:,.4f}'.format})
+  df.to_string(formatters={'p2p2x':'{:,.4f}'.format})
+
+  reorder = df[columns]
+  # Output to CSV
+  reorder.to_csv(output+'.csv', sep=',', na_rep='NaN', engine='python',
+                           float_format='%.3f',
+                           header=True, cols=columns)
+
+  # Output to Excel
+  reorder.to_excel(output+'.xlsx', header=True , na_rep='NaN')
+
+
+##########################################################################
+def PrintAllData(Data):
+  
+  members = get.keys(Data)
+  
+  with open('all.txt', 'w') as f:
+    f.write('pdb_id,')
+    for i in members:
+      f.write(i+',')
+    f.write('\n')
+
+    for pdb in Data:
+      f.write(Data)
+
+  
+##########################################################################
+# 
+#   Peter Man-Un Un @ MSSM
+#
+#   v1.0    17.03.11
+#
+#
+#
+#
+
+
+
+
+##########################################################################

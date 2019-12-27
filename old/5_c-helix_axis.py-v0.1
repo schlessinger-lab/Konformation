@@ -1,0 +1,330 @@
+#!/usr/bin/python
+
+import sys
+
+##########################################################################
+##
+##	Peter M.U. Ung	@ MSSM
+##
+##	Calculate the helix axis of the kinase C-helix, and use the axis and
+##	conserved Glu on C-helix to measure whether the kinase structure has
+##	C-in or C-out conformation, relative to a reference inhibitor-bound 
+##	C-in structure (1atp).
+##	- C-helix axis angle
+##	- C-helix curvature
+##	- C-helix/N-domain Glu/Lys distance
+##
+## 	** Make sure no 'blank' residue in fasta library in the regions
+##	   that will be used for residue extraction -- catalytic conserved 
+##	   positions (+/- 3 residues) of C-helix (Glu) and N-domain (Lys)
+##
+##########################################################################
+msg = '''\n    Usage: {0}             
+            [PDB file list] [PDB Directory]
+	    [Ref PDB] [Aligned FASTA library]
+            [Ref C-Helix | 5,7,9-Resid center on Glu]
+            [Ref N-lobe (Lys) 5-Resid]
+            [Ref C-lobe (DFG) 5-resid]
+	    [Output filename]
+            (2-3 residues before and after the Center residue (Glu/Lys/Asp))\n
+   e.g.: > {0}\n              pdb.list pdb_directory library.fasta 
+              1atp.pdb HTLNEKRIL AMKIL TDFGF output.txt\n'''.format(sys.argv[0])
+if len(sys.argv) != 9: sys.exit(msg) 
+
+##########################################################################
+import re,os,glob
+import numpy as np
+from CommonUtility import *
+from aa_residue import AA
+from Bio import SeqIO
+from Bio.PDB.PDBParser import PDBParser
+from Bio.PDB.Polypeptide import PPBuilder
+p = PDBParser(PERMISSIVE=1)
+
+##########################################################################
+def CHelixConformation( pdb_list, pdb_dir, ref_pdb, fasta_lib,
+          helix_res, n_dom_res, c_dom_res, output ):
+
+  pdb_name = glob.glob(ref_pdb)[0].split('/')[-1].split('.')[0]
+
+  # Read in aligned fasta library for the PDB
+  print('\n### Reading in aligned FASTA library ###')
+  Fasta_Lib = list(SeqIO.parse(fasta_lib, 'fasta'))
+  print(' Found aligned FASTA entries:\t'+str(len(Fasta_Lib)))
+
+  # Read in Reference PDB, extract the helix residues and domain resid columns,
+  print('\n### Calculate reference PDB C-helix parameters ###')
+  print('>>>> Reference PDB: '+pdb_name)
+  Ref_Helix, helix_column = RefFastaColumn(Fasta_Lib, helix_res, pdb_name)
+  Ref_N_Dom, n_dom_column = RefFastaColumn(Fasta_Lib, n_dom_res, pdb_name)
+  Ref_C_Dom, c_dom_column = RefFastaColumn(Fasta_Lib, c_dom_res, pdb_name)
+
+  # Calculate the reference helix axis and C-helix parameters
+  pdb_obj      = p.get_structure(pdb_name, ref_pdb)
+  Ref_H_Coords = ExtractPDBCoords(pdb_obj, Ref_Helix, len(helix_res))
+  Ref_N_Coords = ExtractPDBCoords(pdb_obj, Ref_N_Dom, len(n_dom_res))
+  Ref_C_Coords = ExtractPDBCoords(pdb_obj, Ref_C_Dom, len(c_dom_res))
+  Ref_Coords   = [pdb_name, Ref_H_Coords, Ref_N_Coords, Ref_C_Coords]
+
+  # Extract the helix residues and domain resid using the column info
+  Helix_Seq = FastaFromColumn(Fasta_Lib, helix_column, len(helix_res))
+  N_Dom_Seq = FastaFromColumn(Fasta_Lib, n_dom_column, len(n_dom_res))
+  C_Dom_Seq = FastaFromColumn(Fasta_Lib, c_dom_column, len(c_dom_res))
+
+  # Calculate the query PDBs helix axis and C-helix parameters
+  missing = open(output+'.missing.dat', 'wh')
+  PDB_Coords = []
+  with open(pdb_list, 'rh') as fi:
+    for line in fi:
+      pdb_name = line.split('.')[0]
+      print('\n>>> Current PDB: '+pdb_name)
+      # Skip if protein is not found in fasta library or sequence has blank 
+      # residue '-' in the sequence
+      if pdb_name not in Helix_Seq:
+        print('#*#* {0} is not in FASTA library.'.format(pdb_name))
+        continue
+      if CheckSequence( Helix_Seq[pdb_name] ) is False:
+        print('** {0} has missing residue: {1}. Ignored **'.format(
+              pdb_name, str(Helix_Seq[pdb_name]) ))
+        continue
+
+      print glob.glob('./{0}/{1}'.format(pdb_dir, line.rstrip()))[0]
+      pdb_path = glob.glob('{0}/{1}'.format(pdb_dir, line.rstrip()))[0]
+      pdb_obj  = p.get_structure(pdb_name, file_handle(pdb_path))
+      H_Coords = ExtractPDBCoords(pdb_obj, Helix_Seq[pdb_name], len(helix_res))
+      N_Coords = ExtractPDBCoords(pdb_obj, N_Dom_Seq[pdb_name], len(n_dom_res))
+      C_Coords = ExtractPDBCoords(pdb_obj, C_Dom_Seq[pdb_name], len(c_dom_res))
+
+      if H_Coords is None: missing.write(pdb_name+'\t'+'Helix\n')
+      if N_Coords is None: missing.write(pdb_name+'\t'+'N_dom\n')
+      if C_Coords is None: missing.write(pdb_name+'\t'+'C_dom\n')
+      else:
+        PDB_Coords.append([pdb_name, H_Coords, N_Coords, C_Coords])
+
+    # Compare reference and query PDB C-helix parameters
+#    HelixMeasurements(Ref_Coords, PDB_Coords, output)
+
+  missing.close()
+
+
+##########################################################################
+## Compare the Helix axis and distance between the Reference axis and query
+## axis
+def HelixMeasurements(Ref_Coords, PDB_Coords, output):
+
+  # Call up helix calculation
+  CalculateHelixAxis(Ref_Coords)
+
+
+
+##########################################################################
+## From the input Biopython PDB Object, extract the coordinates and info of
+## 'res_num' rsidues corresponding to the supplied 'Query Sequence'
+def ExtractPDBCoords(PDB, Query_Seq, res_num):
+  
+  pdb_id  = PDB.get_id()
+  Res_Obj = PDB.get_residues()
+  print('>> Query Sequence:\t{0} -\t{1}'.format(pdb_id, ''.join(Query_Seq)))
+
+  ## Convert BioPython Residue Object into List of Residues
+  Residues = []
+  for idx, res in enumerate(Res_Obj):
+    if re.search(r"H_|W", res.get_id()[0]): continue
+
+    resname   = res.get_resname()
+    resid     = res.get_id()[1]
+    bb_coords = []
+    # Get the backbone C-alpha coordinates
+    if res.has_id('N'):  bb_coords.append(res['N'].get_coord())
+    if res.has_id('CA'): bb_coords.append(res['CA'].get_coord())
+    if res.has_id('C'):  bb_coords.append(res['C'].get_coord())
+    
+    # Get the sidechain vector by averaging the sidechain coordinates and 
+    # calculate the vector from C-alpha to the average coordinates
+    ca_coord, sc_vector = SideChainVector(res)
+
+#    print('{0} {1} {2} {3} {4}'.format(idx,resname,resid,ca_coord,sc_vector))
+    Residues.append([resname, resid, bb_coords, ca_coord, sc_vector])
+
+  # Convert the target sequence into 3-letter AA name. Number of residue
+  # depends on the input sequence length (variable)
+  Target_Seq = [AA(Query_Seq[i]) for i in range(0, res_num)]
+
+  # Iterate through the entire protein sequence and match the sequence to
+  # the entire target sequence AA in 'Target_Seq' (vary in length)
+  Found, matched = [], False
+  for idx, residue in enumerate(Residues):
+    # If the current position is reaching the end of the sequence and
+    # only 'res_num' residue away, meaning won't have the exact  matching
+    # to the 'Target_Seq', break the search
+    if (idx + res_num-1) >= len(Residues):
+      break
+
+    Found = []  
+    # If found a match, check the next residue for next in 'Target_Seq'
+    # until matching all 'Target_Seq'
+    for step in range(0, res_num):
+      if Residues[idx+step][0] == Target_Seq[step]:
+        Found.append(Residues[idx+step])
+#        print Residues[idx+step][0]+str(Residues[idx+step][1])
+      else:
+        break   # If no matching, break search and step to next residue
+
+    if len(Found) == res_num:
+      matched = True
+      break
+    else:
+      continue
+
+  if matched is False:
+    print('## Cannot find in\t{0}'.format(pdb_id))
+    return None
+  else:
+    print(' Matched sequence in\t{0} -\t{1}-{3}-{2}'.format(
+           pdb_id, Found[0][1], Found[-1][1],
+           ''.join([AA(Found[i][0]) for i in range(0,len(Found))]) ) )
+    return Found
+
+
+##########################################################################
+## Calculate the CA-to-(sidechain average) vector
+def SideChainVector(res):
+  ca_coord  = res['CA'].get_coord()
+  sc_coords = []
+  for atom in res:
+    # ignore mainchain atoms
+    if atom.get_name() != 'C':
+      if not re.search(r'CA|N|O', atom.get_name()):
+        sc_coords.append(res[atom.get_name()].get_coord())
+
+  if len(sc_coords) > 0:    # if not Glycine
+#    avg_coord = [sum(atom) / len(atom) for atom in zip(*sc_coords)] 
+    avg_coord = np.mean(sc_coords, axis=0)
+    sc_vector = np.asarray(avg_coord - ca_coord)
+  else:
+    sc_vector = np.asarray([0, 0, 0])
+
+  return ca_coord, sc_vector
+
+
+##########################################################################
+def CheckSequence(Seq):
+  for resid in Seq:
+    if resid == '-':
+      return False
+  return True
+  
+##########################################################################
+## Get the sequence from the reference PDB file
+def RefFastaColumn(Fasta_Lib, residues, name):
+
+  seq, Set = '', {}
+  for seq_record in Fasta_Lib:
+    if re.search(r'{0}'.format(name), seq_record.id.replace(':','_')):
+      seq = str(seq_record.seq)
+
+  # Find the sequence by the 5/7-resid code in (D-2,D-1,D,D+1,D+2) format
+  # but refer the column by the center residue 'D'
+  Match  = re.finditer(r'{0}'.format(residues), seq)
+  for m in Match:
+    column = m.start(0)
+#  Set[name.split('.')[0]] = list(residues)
+  print(' reference sequence:\t'+residues)
+  print(' Column in Fasta:\t'+str(column+1))  # convert from 'start 0' to 1
+  return residues, column
+
+
+##########################################################################
+## Read from alignment FASTA. Find the position of the search pattern in the 
+## sequence and make a new sequence, with the residue before the input sequence
+## plus the first two residues in the input sequence.
+## ** Make sure no 'blank' residue in fasta library in that region
+def FastaFromColumn(Fasta_Lib, column, res_num):
+  Set    = {}
+  for seq_record in Fasta_Lib:
+    # Since all query sequences are aligned, the column numbers should 
+    # correspond to the correct helix in query sequences
+    seq    = str(seq_record.seq)
+    Qu_Seq = [seq[column+i] for i in range(0, res_num)]
+    pdb_id = seq_record.id.split('|')[0]
+    Set[pdb_id.replace(':','_')] = Qu_Seq
+  return Set
+
+
+##########################################################################
+## Calculate the helix axis and curvature using the supplied coordinates
+def CalculateHelixAxis( coord ):
+  # do lsq fitting of x,y,z values for helix
+  if len(coord) > 0:
+    coord = np.asarray(coord)
+    count = len(coord)
+    start, end, vec = [], [], []
+
+    for x in range(0,2):
+      (s,e) = lsq( range(count), coord[:,x] )
+      start.append(s)
+      end.append(e)
+      vec.append(end[x] - start[x])
+
+    start = np.asarray(start)
+    end   = np.asarray(end)
+    vec   = np.asarray(vec)
+    v_len = np.linalg.norm(end - start)
+#    curva = 
+    print('\n Start = ({0:9.4f}, {1:9.4f}, {2:9.4f})'.format(start[0],start[1],start[2]))
+    print('\n Vector = ({0:9.4f}, {1:9.4f}, {2:9.4f})'.format(vec[0],vec[1],vec[2]))
+
+#    angl_2 = angle(vec1,vec2)
+#    dist_2 = distance(start1,vec1, start2,vec2)
+    return [vec, start]
+
+  else:
+    print('  Error: Missing coordinates for helix')
+
+
+##########################################################################
+
+
+
+##########################################################################
+
+## Magnitude of a vector
+def vectmag( v ):
+  return np.sqrt( v[0]*v[0] + v[1]*v[1] + v[2]*v[2] )
+  
+## Angle between vectors
+def angle( v1, v2 ):
+  ang = np.arccos( numpy.dot(v1,v2)/(vectmag(v1)*vectmag(v2)) )
+  ang = ang*180/np.pi
+  return ang
+
+## Distance between vectors
+def distance(start1, v1, start2, v2):
+  cross_prod = np.cross(v1,v2)
+  mx         = vectmag(cross_prod)
+  norm       = corss_prod/mx
+  diff       = start1 - start2
+  dist       = np.fabs( np.dot(norm,diff) )
+  return dist
+
+## Least-square fit of 2 arrays, x and y, return 1st and last points from fit
+def lsq( x, y ):
+  slope, intcpt = np.polyfit( x, y, 1, full=False)
+  first_point   = slope*x[0]  + intcpt
+  last_point    = slope*x[-1] + intcpt
+  
+  return first_point, last_point
+
+
+##########################################################################
+if __name__ == '__main__':
+  CHelixConformation( sys.argv[1], sys.argv[2], sys.argv[3], 
+                      sys.argv[4], sys.argv[5], sys.argv[6], 
+                      sys.argv[7], sys.argv[8] )
+
+##########################################################################
+##
+##	v1.0	17.01.08
+##
+##
+##########################################################################

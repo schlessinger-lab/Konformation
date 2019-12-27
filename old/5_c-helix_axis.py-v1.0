@@ -1,0 +1,115 @@
+#!/usr/bin/python
+
+import sys
+
+##########################################################################
+##
+##	Peter M.U. Ung	@ MSSM
+##
+##	Calculate the helix axis of the kinase C-helix, and use the axis and
+##	conserved Glu on C-helix to measure whether the kinase structure has
+##	C-in or C-out conformation, relative to a reference inhibitor-bound 
+##	C-in structure (1atp).
+##	- C-helix axis angle
+##	- C-helix curvature
+##	- C-helix/N-domain Glu/Lys distance
+##
+## 	** Make sure no 'blank' residue in fasta library in the regions
+##	   that will be used for residue extraction -- catalytic conserved 
+##	   positions (+/- 3 residues) of C-helix (Glu) and N-domain (Lys)
+##
+##########################################################################
+msg = '''\n    Usage: {0}             
+            [PDB file list] [PDB Directory]
+	    [Ref PDB] [Aligned FASTA library]
+            [Ref C-Helix | 5,7,9-Resid center on Glu]
+            [Ref N-lobe (Lys) 5-Resid]
+            [Ref C-lobe (DFG) 5-resid]
+	    [Output filename]
+            [Optional: correction file] <-- corrected file: correct.<PDB file>
+            (2-3 residues before and after the Center residue (Glu/Lys/Asp))\n
+   e.g.: > {0}\n              pdb.list pdb_directory 1atp.pdb
+              library.fasta HTLNEKRIL AMKIL VTDFG output 
+              [missing.txt]\n'''.format(sys.argv[0])
+if len(sys.argv) < 9 or len(sys.argv) > 10:  sys.exit(msg) 
+
+##########################################################################
+import re,os,glob
+from x_helix_axis import *
+from x_fasta_parsing import *
+from CommonUtility import *
+import multiprocessing
+from Bio import SeqIO
+from Bio.PDB.PDBParser import PDBParser
+p = PDBParser(PERMISSIVE=1, QUIET=True)
+
+##########################################################################
+def CHelixConformation( pdb_list, pdb_dir, ref_pdb, fasta_lib,
+          helix_res, n_dom_res, c_dom_res, output, **kwargs):
+
+  # Read in aligned fasta library for the PDB
+  print('\n### Reading in aligned FASTA library ###')
+  Fasta_Lib = list(SeqIO.parse(fasta_lib, 'fasta'))
+  print(' Found aligned FASTA entries:\t'+str(len(Fasta_Lib)))
+
+  # Read in Reference PDB, extract the helix residues and domain resid columns,
+  pdb_name = ref_pdb.split('.')[0]
+  print('\n### Calculate reference PDB C-helix parameters ###')
+  print('>>>> Reference PDB: '+pdb_name)
+  Ref_Helix, helix_column = RefFastaColumn(Fasta_Lib, helix_res, pdb_name)
+  Ref_N_Dom, n_dom_column = RefFastaColumn(Fasta_Lib, n_dom_res, pdb_name)
+  Ref_C_Dom, c_dom_column = RefFastaColumn(Fasta_Lib, c_dom_res, pdb_name)
+
+  # Extract the helix residues and domain resid using the column info
+  Helix_Seq = FastaFromColumn(Fasta_Lib, helix_column, len(helix_res))
+  N_Dom_Seq = FastaFromColumn(Fasta_Lib, n_dom_column, len(n_dom_res))
+  C_Dom_Seq = FastaFromColumn(Fasta_Lib, c_dom_column, len(c_dom_res))
+
+
+  # Calculate the reference helix axis and C-helix parameters
+  pRef = ParsePDB( h_seq=Helix_Seq, n_seq=Ref_N_Dom, c_seq=Ref_C_Dom,
+                   h_res=helix_res, n_res=n_dom_res, c_res=c_dom_res, 
+                   pdb_dir=pdb_dir,corr=CoordCorrect(option, pdb_dir) )
+  Ref_Coords = pRef.extract_pdb(ref_pdb)
+
+  # Calculate the query PDBs helix axis and C-helix parameters
+  with open(pdb_list, 'rh') as fi:
+    Query_PDB = [line.rsplit()[0] for line in fi]
+
+  mpi  = multiprocessing.Pool(processes = multiprocessing.cpu_count())
+  pPDB = ParsePDB( h_seq=Helix_Seq, n_seq=N_Dom_Seq, c_seq=C_Dom_Seq,
+                   h_res=helix_res, n_res=n_dom_res, c_res=c_dom_res, 
+                   pdb_dir=pdb_dir, corr=CoordCorrect(option, pdb_dir) )
+  Tmp  = mpi.map(pPDB, Query_PDB)
+  mpi.close()
+  mpi.join()
+
+  PDB_Coords = [Itm for Itm in Tmp if Itm is not None]
+  print('\n## Input Query: {0} - Accepted: {1}\n'.format(
+        len(Tmp), len(PDB_Coords)))
+  os.system('cat _TEMP.* > '+output+'.missing.txt; rm _TEMP.*')
+
+  # Compare reference and query PDB C-helix/N-dom/C-dom parameters
+  HelixMeasurements(Ref_Coords, PDB_Coords, output)
+  DomainDistances(Ref_Coords, PDB_Coords, output)
+  
+  
+
+##########################################################################
+if __name__ == '__main__':
+  option = None
+  if len(sys.argv) == 10:
+    option = sys.argv[9]
+  CHelixConformation( sys.argv[1], sys.argv[2], sys.argv[3], 
+                      sys.argv[4], sys.argv[5], sys.argv[6], 
+                      sys.argv[7], sys.argv[8], f=option)
+
+##########################################################################
+##
+##  v0.0    17.01.08
+##  v0.1    17.01.23    moved sub functions to separate files
+##  v0.2    17.01.28
+##  v0.3    17.01.28
+##
+##  v1.0
+##########################################################################

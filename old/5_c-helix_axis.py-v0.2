@@ -1,0 +1,310 @@
+#!/usr/bin/python
+
+import sys
+
+##########################################################################
+##
+##	Peter M.U. Ung	@ MSSM
+##
+##	Calculate the helix axis of the kinase C-helix, and use the axis and
+##	conserved Glu on C-helix to measure whether the kinase structure has
+##	C-in or C-out conformation, relative to a reference inhibitor-bound 
+##	C-in structure (1atp).
+##	- C-helix axis angle
+##	- C-helix curvature
+##	- C-helix/N-domain Glu/Lys distance
+##
+## 	** Make sure no 'blank' residue in fasta library in the regions
+##	   that will be used for residue extraction -- catalytic conserved 
+##	   positions (+/- 3 residues) of C-helix (Glu) and N-domain (Lys)
+##
+##########################################################################
+msg = '''\n    Usage: {0}             
+            [PDB file list] [PDB Directory]
+	    [Ref PDB] [Aligned FASTA library]
+            [Ref C-Helix | 5,7,9-Resid center on Glu]
+            [Ref N-lobe (Lys) 5-Resid]
+            [Ref C-lobe (DFG) 5-resid]
+	    [Output filename]
+            [Optional: correction file] <-- corrected file: correct.1ATP_E
+            (2-3 residues before and after the Center residue (Glu/Lys/Asp))\n
+   e.g.: > {0}\n              pdb.list pdb_directory pdb_directory/1atp.pdb
+              library.fasta HTLNEKRIL AMKIL VTDFG output 
+              [missing.txt]\n'''.format(sys.argv[0])
+if len(sys.argv) < 9 or len(sys.argv) > 10:  sys.exit(msg) 
+
+##########################################################################
+import re,os,glob
+from x_helix_axis import *
+from x_fasta_parsing import *
+from CommonUtility import *
+import multiprocessing
+from Bio import SeqIO
+from Bio.PDB.PDBParser import PDBParser
+p = PDBParser(PERMISSIVE=1)
+
+##########################################################################
+def CHelixConformation( pdb_list, pdb_dir, ref_pdb, fasta_lib,
+          helix_res, n_dom_res, c_dom_res, output, **kwargs):
+
+  pdb_name = ref_pdb.split('.')[0]
+
+  # Read in aligned fasta library for the PDB
+  print('\n### Reading in aligned FASTA library ###')
+  Fasta_Lib = list(SeqIO.parse(fasta_lib, 'fasta'))
+  print(' Found aligned FASTA entries:\t'+str(len(Fasta_Lib)))
+
+  # Read in Reference PDB, extract the helix residues and domain resid columns,
+  print('\n### Calculate reference PDB C-helix parameters ###')
+  print('>>>> Reference PDB: '+pdb_name)
+  Ref_Helix, helix_column = RefFastaColumn(Fasta_Lib, helix_res, pdb_name)
+  Ref_N_Dom, n_dom_column = RefFastaColumn(Fasta_Lib, n_dom_res, pdb_name)
+  Ref_C_Dom, c_dom_column = RefFastaColumn(Fasta_Lib, c_dom_res, pdb_name)
+
+  # Extract the helix residues and domain resid using the column info
+  Helix_Seq = FastaFromColumn(Fasta_Lib, helix_column, len(helix_res))
+  N_Dom_Seq = FastaFromColumn(Fasta_Lib, n_dom_column, len(n_dom_res))
+  C_Dom_Seq = FastaFromColumn(Fasta_Lib, c_dom_column, len(c_dom_res))
+
+
+  # Calculate the reference helix axis and C-helix parameters
+#  pdb_path     = glob.glob('{0}/{1}'.format(pdb_dir, ref_pdb))[0]
+#  pdb_obj      = p.get_structure(pdb_name, pdb_path)
+#  Ref_H_Coords = ExtractPDBCoords( pdb_obj, Ref_Helix )
+#  Ref_N_Coords = ExtractPDBCoords( pdb_obj, Ref_N_Dom )
+#  Ref_C_Coords = ExtractPDBCoords( pdb_obj, Ref_C_Dom )
+#  Ref_Coords   = [pdb_name, Ref_H_Coords, Ref_N_Coords, Ref_C_Coords]
+  pRef = ParsePDB( h_seq=Helix_Seq, n_seq=Ref_N_Dom, c_seq=Ref_C_Dom,
+                   h_res=helix_res, n_res=n_dom_res, c_res=c_dom_res, 
+                   pdb_dir=pdb_dir )
+  Ref_Coords = pRef.extract_pdb(ref_pdb)
+
+
+  # Calculate the query PDBs helix axis and C-helix parameters
+  with open(pdb_list, 'rh') as fi:
+    Query_PDB = [line.rsplit()[0] for line in fi]
+
+  mpi  = multiprocessing.Pool(processes = multiprocessing.cpu_count())
+  pPDB = ParsePDB( h_seq=Helix_Seq, n_seq=N_Dom_Seq, c_seq=C_Dom_Seq,
+                   h_res=helix_res, n_res=n_dom_res, c_res=c_dom_res, 
+                   pdb_dir=pdb_dir, corr=CoordCorrect(option, pdb_dir) )
+  Tmp  = mpi.map(pPDB, Query_PDB)
+  mpi.close()
+  mpi.join()
+
+  PDB_Coords = [Itm for Itm in Tmp if Itm is not None]
+  print('\n## Input Query: {0} - Accepted: {1}\n'.format(
+        len(Tmp), len(PDB_Coords)))
+  os.system('cat _TEMP.* > missing.txt; rm _TEMP.*')
+
+  # Compare reference and query PDB C-helix/N-dom/C-dom parameters
+  HelixMeasurements(Ref_Coords, PDB_Coords, output)
+  DomainDistances(Ref_Coords, PDB_Coords, output)
+  
+  
+
+##########################################################################
+class ParsePDB(object):
+  def __init__( self, h_seq=[], n_seq=[], c_seq=[],
+                      h_res='', n_res='', c_res='',
+                      pdb_dir='', corr={}   ):
+    self.h_seq   = h_seq
+    self.n_seq   = n_seq
+    self.c_seq   = c_seq
+    self.h_res   = h_res
+    self.n_res   = n_res
+    self.c_res   = c_res
+    self.pdb_dir = pdb_dir
+    self.corr    = corr
+
+  def __call__(self, inp):
+    return self.extract_pdb(inp)
+
+########################################################
+  def extract_pdb( self, inp ):
+
+    with open('_TEMP.'+inp, 'wh') as missing:
+      pdb_name = inp.split('.')[0]
+      print('>>> Current PDB: '+pdb_name)
+
+      # Skip if protein is not found in fasta library or sequence has blank 
+      # residue '-' in the sequence
+      if pdb_name not in self.h_seq:
+        print('#*#* {0} is not in FASTA library.'.format(pdb_name))
+        return None
+      if CheckSequence( self.h_seq[pdb_name] ) is False:
+        print('** {0} has missing residue: {1}. Ignored **'.format(
+              pdb_name, str(self.h_seq[pdb_name]) ))
+        return None
+
+      pdb_path = glob.glob('{0}/{1}'.format(self.pdb_dir, inp.rstrip()))[0]
+      print pdb_path
+      pdb_obj  = p.get_structure(pdb_name, pdb_path)
+      H_Crds = ExtractPDBCoords( pdb_obj, self.h_seq[pdb_name] )
+      N_Crds = ExtractPDBCoords( pdb_obj, self.n_seq[pdb_name] )
+      C_Crds = ExtractPDBCoords( pdb_obj, self.c_seq[pdb_name] )
+
+      if H_Crds is None:
+        if pdb_name in self.corr:
+          H_Crds = self.corr[pdb_name][0]
+        else:
+          missing.write(inp+'|'+'Helix\n')
+          return None
+      if N_Crds is None:
+        if pdb_name in self.corr:
+          N_Crds = self.corr[pdb_name][1]
+        else:
+          missing.write(inp+'|'+'N_dom\n')
+          return None
+      if C_Crds is None:
+        if pdb_name in self.corr:
+          C_Crds = self.corr[pdb_name][2]
+        else:
+          missing.write(inp+'|'+'C_dom\n')
+          return None
+      
+      return [pdb_name, H_Crds, N_Crds, C_Crds]
+
+
+##########################################################################
+## Optional file contain correction for PDBs that have missing residues in
+## the sequence matching region. Run thru the program first to identify
+## which PDB has what missing. The correction residues should be in N-CA-C 
+## order and center on the key residue
+##   Format of corrected file: correct.<PDB_X>      correct.1ATP_E
+def CoordCorrect( option, pdb_dir ):
+  dic = {}
+  if option is None:
+    return dic
+
+  with open(option, 'r') as fi:
+    for l in fi:
+      pdb_file, typ = l.split('|')
+      pdb_name = pdb.split('.')[0]
+
+      try:
+        pdb_path = glob.glob('{0}/correct.{1}'.format(pdb_dir, pdb_name))[0]
+      except AttributeError:
+        continue
+      px       = p.get_structure(pdb_name, pdb_path)
+      res_obj  = px.get_residues()
+
+      Residue = []
+      for idx, res in enumerate(res_obj):
+        resname = res.get_resname()
+        resid   = res.get_id()[1]
+        bb_coords = []
+        if res.has_id('N'):  bb_coords.append(res['N'].get_coord())
+        if res.has_id('CA'): bb_coords.append(res['CA'].get_coord())
+        if res.has_id('C'):  bb_coords.append(res['C'].get_coord())
+
+        try:
+          ca_coord, sc_vector = SideChainVector(res)
+        except KeyError:
+          ca_coord, sc_vector = res['CA'].get_coord(), None
+        Residue.append([resname, resid, bb_coords, ca_coords, sc_vector])
+
+      # Put Helix, N-Dom, C-Dom data into separated arrays 1,2,3
+      if pdb_name not in dic:
+        dic[pdb_name] = [[],[],[]]
+      elif typ == 'Helix':
+        dic[pdb_name][0].append(Residue)
+      elif typ == 'N_dom':
+        dic[pdb_name][1].append(Residue)
+      elif typ == 'C_dom':
+        dic[pdb_name][2].append(Residue)
+  return dic
+
+
+##########################################################################
+def CalculateDist( Coords ):
+  # Find the center element in an array. Since input is odd number and 3 
+  # atoms for each residue, array center be should 'CA' of center residue
+  # e.g.>  HTLN|E|KRIL
+
+  try:
+    H_Coords = sum(zip(*Coords[1])[2], [])
+  except TypeError:
+    print Coords[0]
+  H_Coords = sum(zip(*Coords[1])[2], [])
+  N_Coords = sum(zip(*Coords[2])[2], [])
+  C_Coords = sum(zip(*Coords[3])[2], [])
+
+  H_pt = H_Coords[ArrCent(len(H_Coords))]
+  N_pt = N_Coords[ArrCent(len(N_Coords))]
+  C_pt = C_Coords[ArrCent(len(C_Coords))]
+
+  # Calculate spherical angles from N/C-domain to origin
+  # Calculate distance distance between N/C-domains to center of C-helix
+  n_phi, n_psi = SphericalAngles(N_pt)
+  c_phi, c_psi = SphericalAngles(C_pt)
+  dist_N_H = Distance(H_pt, N_pt)
+  dist_C_H = Distance(H_pt, C_pt)
+  dist_N_C = Distance(N_pt, C_pt)
+  return [ Coords[0], n_phi, n_psi, c_phi, c_psi,
+           dist_N_H, dist_N_C, dist_C_H ]
+
+
+##########################################################################
+
+def DomainDistances( Ref_Coords, PDB_Coords, output ):
+
+  # Create distance object for MPI
+  mpi = multiprocessing.Pool(processes = multiprocessing.cpu_count())
+  Ref = CalculateDist(Ref_Coords)
+  Tmp = mpi.map(CalculateDist, PDB_Coords)
+  mpi.close()
+  mpi.join()
+
+  Tgt_List = [x for x in Tmp if x is not None]
+  PrintDistMeasure(Ref, Tgt_List, output)
+
+
+##########################################################################
+def PrintDistMeasure( Ref, Tgt_List, output ):
+# [ Coords[0], n_phi, n_psi, c_phi, c_psi, dist_N_H, dist_N_C, dist_C_H ]
+
+  angl = open(output+'.dom-angle.txt', 'w')
+  angl.write('## Spherical Angle of N-dom, C-dom\n')
+  angl.write('## Reference {0} N(Phi:Psi) = {1:6.2f} - {2:6.2f} \n'.format(
+             Ref[0], Ref[1], Ref[2] ))
+  angl.write('## Reference {0} C(Phi:Psi) = {1:6.2f} - {2:6.2f} \n'.format(
+             Ref[0], Ref[3], Ref[4] ))
+
+  dist = open(output+'.dom-dist.txt', 'w')
+  dist.write('## Dist between N-dom_C-heix, C-dom_C-helix, N-dom_C-dom\n')
+  dist.write('## Reference {0} N-H: {1:6.2f}  N-C: {2:6.2f}  C-H: {3:6.2f}\n'.format(        Ref[0], Ref[5], Ref[6], Ref[7] ))
+
+  for Tgt in Tgt_List:
+    angl.write('{0} d-N(Phi:Psi) = {1:6.2f} - {2:6.2f}\n'.format( Tgt[0],
+           Ref[1]-Tgt[1], Ref[2]-Tgt[2]))
+    angl.write('{0} d-C(Phi:Psi) = {1:6.2f} - {2:6.2f}\n'.format( Tgt[0],
+           Ref[3]-Tgt[3], Ref[4]-Tgt[4]))
+
+    dist.write('{0} d-N(N-H:N-C) = {1:6.2f} - {2:6.2f}\n'.format( Tgt[0],
+           Ref[5]-Tgt[5], Ref[6]-Tgt[6]))
+    dist.write('{0} d-C(C-H:C-N) = {1:6.2f} - {2:6.2f}\n'.format( Tgt[0],
+           Ref[7]-Tgt[7], Ref[6]-Tgt[6]))
+
+  angl.close()
+  dist.close()
+
+
+##########################################################################
+
+
+if __name__ == '__main__':
+  option = None
+  if len(sys.argv) == 10:
+    option = sys.argv[9]
+  CHelixConformation( sys.argv[1], sys.argv[2], sys.argv[3], 
+                      sys.argv[4], sys.argv[5], sys.argv[6], 
+                      sys.argv[7], sys.argv[8], f=option)
+
+##########################################################################
+##
+##  v0.0    17.01.08
+##  v0.1    17.01.23    moved sub functions to separate files
+##  v0.2    17.01.28
+##
+##########################################################################

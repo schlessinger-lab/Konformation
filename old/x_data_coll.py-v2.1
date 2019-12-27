@@ -1,0 +1,68 @@
+#!/usr/bin/python
+
+import sys,os,re
+import numpy as np
+from CommonUtility import *
+from sklearn import metrics
+from sklearn.cluster import DBSCAN
+from sklearn.preprocessing import StandardScaler
+
+##########################################################################
+def BuildDataSet():
+  return { 
+           'pdb_id':None,
+           'h_phi':None,   'h_psi':None,   'h_axvc':None,
+           'h_norm':None,  'h_cgvc':None,  'h_curv':None,
+           'h_ca':None,    'h_cg':None,
+           'n_ca':None,    'c_ca':None,
+           'n_phi':None,   'n_psi':None,
+           'c_phi':None,   'c_psi':None,
+           'dist_NH':None, 'dist_NC':None, 'dist_CH':None,
+           'ang_NHs':None, 'ang_CHs':None,
+           'r_medi':None,  'r_std':None,
+           'g_resi':None,  'g_coord':None,
+           'p1p1x':None,   'p2p2x':None,   'dfg_st':None,
+           'r_spine':None, 'r_sp_1':None,  'r_sp_2':None,
+           'r_sp_dfg':None,'c_sp_6':None,  'c_sp_8':None
+         }
+
+
+################################################
+def Data2Pandas(Data, output):
+  import pandas as pd
+
+  df = pd.DataFrame.from_dict(Data, orient='index')
+  df.index.name = 'pdb_id'
+  
+  columns = ['pdb_id',
+             'h_phi','h_psi','h_axvc','h_norm','h_cgvc','h_curv',
+             'p1p1x','p2p2x','dfg_st',
+             'h_ca','h_cg','n_ca','c_ca','n_phi','n_psi','c_phi','c_psi',
+             'dist_NH','dist_NC','dist_CH','ang_NHs','ang_CHs',
+             'r_spine','r_sp_1','r_sp_2','r_sp_dfg',
+             'r_medi','r_std','g_resi']
+
+#  df.set_option('precision', 4)
+  df.to_string(formatters={'r_medi':'{:,.4f}'.format})
+  df.to_string(formatters={'r_std': '{:,.4f}'.format})
+
+  reorder = df[columns]
+  # Output to CSV
+  reorder.to_csv(output+'.csv', sep=',', na_rep='NaN', engine='python',
+                 float_format='%.5f',
+                 header=True, cols=columns)
+
+  # Output to Excel
+  reorder.to_excel(output+'.xlsx', header=True , na_rep='NaN')
+
+
+##########################################################################
+# 
+#   Peter Man-Un Un @ MSSM
+#
+#   v1.0    17.03.11
+#   v2.0    17.03.17    add more parameters
+#   v2.1    17.04.28    add ax-cg normal vector, h-ax dot product, cg vector
+#
+#
+##########################################################################

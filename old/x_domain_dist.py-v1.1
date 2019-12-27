@@ -1,0 +1,148 @@
+#!/usr/bin/python
+
+import re,os,glob,sys
+import numpy as np
+from x_dfg_torsion import *
+from x_helix_axis  import *
+from x_fasta_parse import *
+from x_pdb_extract import *
+from CommonUtility import *
+
+
+##########################################################################
+## Use MPI to run calculation of spherical angle and distance calculations 
+## for H-helix, N-domain, and C-domain. Results are exported into files
+def DomainDistances( Ref_Coords, PDB_Coords, RefReg2, Reg2, output ):
+
+  # Input_Coords = [pdb_name, H_Coords, N_Coords, C_Coords]
+  #     x_Coords = [resname, resid, bb_coords, ca_coord, cg_coord]  
+
+  # Create distance object for MPI
+#  mpi = multiprocessing.Pool(processes = multiprocessing.cpu_count())
+  Ref = CalculateDist( [Ref_Coords, RefReg2] )
+  Tmp = [CalculateDist( [Tgt, Reg2[idx]] ) for idx, Tgt in enumerate(PDB_Coords)]
+#  Tmp = mpi.map( CalculateDist, zip(PDB_Coords, Reg2) )
+#  mpi.close()
+#  mpi.join()
+
+  Tgt_List = [x for x in Tmp if x is not None]
+  print(' ## Domain Distances return: {0}'.format(len(Tgt_List)))
+  ExportDistMeasure(Ref, Tgt_List, output)
+  print(' ## Finished Domain Distances')
+
+
+##########################################################################
+## Calculate C-helix-domains parameters. For each element, use the center
+## residue in the array. Since input is odd number and 3 atoms for each 
+## residue, array center be should 'CA' of center residue
+## e.g.>  HTLN|E|KRIL
+def CalculateDist( Input ):
+  Coords, Reg2 = Input
+
+  # Input_Coords = [pdb_name, H_Coords(1), N_Coords(2), C_Coords(3)]
+  #     x_Coords = [resname, resid, bb_coords, ca_coord(3), cg_coord(4)]  
+
+  # Extract the CA coordinates of the center residue
+  H_ca = Coords[1][ArrayCent(len(Coords[1]))][3]
+  try:
+    N_ca = Coords[2][ArrayCent(len(Coords[2]))][3]
+  except TypeError:
+    print Coords[0]
+    
+  C_ca = Coords[3][ArrayCent(len(Coords[3]))][3]
+
+  # Calculate spherical angles from N/C-domain to origin
+  # Calculate distance distance between N/C-domains to center of C-helix
+  n_phi, n_psi = SphericalAngles(N_ca)
+  c_phi, c_psi = SphericalAngles(C_ca)
+  dist_N_H = Distance(H_ca, N_ca)
+  dist_C_H = Distance(H_ca, C_ca)
+  dist_N_C = Distance(N_ca, C_ca)
+
+################
+  # Helix center corresponding to center residue
+  H_rg = Reg2[ArrayCent(len(Reg2))]
+
+  # Extract the CG coordinates of the side chain of residue
+  H_cg = Coords[1][ArrayCent(len(Coords[1]))][4]
+  if H_cg is None:
+    print('  # Dom Warning: Helix side chain missing: '+Coords[0]+' '+Coords[1][ArrayCent(len(Coords[1]))][0]+str(Coords[1][ArrayCent(len(Coords[1]))][1]))
+    angl_NHs, angl_CHs = None, None
+  else:
+    # Calculate angle between N-Lys_CA/C-Asp_CA -- H-Glu_CA -- H-Glu_CG
+    angl_NHs = VectorAngle( (H_rg - N_ca), (H_rg - H_cg) )
+    angl_CHs = VectorAngle( (H_rg - C_ca), (H_rg - H_cg) )
+
+  return [ Coords[0], H_cg, N_ca, C_ca,
+                      n_phi, n_psi, c_phi, c_psi,
+                      dist_N_H, dist_N_C, dist_C_H,
+                      angl_NHs, angl_CHs ]
+
+
+##########################################################################
+## Export spherical angle and distance results into files
+## All numbers are relative to a reference structure (1atp)
+def ExportDistMeasure( Ref, Tgt_List, output ):
+#          [ pdb_name, h_cg(1),      n_ca(2),     c_ca(3),
+#                      n_phi(4),     n_psi(5),    c_phi(6),    c_psi(7),
+#                      dist_N_H(8),  dist_N_C(9), dist_C_H(10),
+#                      angl_NHs(11), angl_CHs(12) ]
+
+  # Write out relative atomic displacement
+  cg   = open(output+'.cg_dist.txt', 'w')
+  cg.write('## Relative side chain distance to reference\n')
+  cg.write('## Reference {0}: Helix CG | N-Dom CA | C-Dom CA\n'.format( Ref[0] ))
+
+  # Write out relative spherical angles for domains
+  angl = open(output+'.dom-angle.txt', 'w')
+  angl.write('## Spherical Angle of N-dom, C-dom\n')
+  angl.write('## Reference {0} N(Phi:Psi): {1:5.1f}  {2:5.1f}  C(Phi:Psi): {3:5.1f}  {4:5.1f}\n'.format(
+             Ref[0], Ref[4], Ref[5], Ref[6], Ref[7] ))
+
+  # Write out relative inter-lobe distances
+  dist = open(output+'.dom-dist.txt', 'w')
+  dist.write('## Dist between N-dom_C-heix, C-dom_C-helix, N-dom_C-dom\n')
+  dist.write('## Reference {0} N-H: {1:5.1f}  C-H: {2:5.1f} N-C: {3:5.1f}\n'.format(        Ref[0], Ref[8], Ref[10], Ref[9] ))
+
+  # Write out relative C-helix-Ndom/Cdom angles
+  helx = open(output+'.h_dom-angle.txt', 'w')
+  helx.write('## Angle between N-Lys_H-Cent_H-Glu, C-Asp_H-Cent_H-Glu\n')
+  helx.write('## Reference {0} N-Lys_H-Cent_H-Glu: {1:5.1f}  C-Asp_H-Cent_H-Glu: {2:5.1f}\n'.format(Ref[0], Ref[11], Ref[12] ))
+
+
+  for Tgt in Tgt_List:
+    cg.write('{0}: {1:5.1f}  {2:5.1f}  {3:5.1f}\n'.format(
+        Tgt[0], VecMag(Tgt[1]-Ref[1]), 
+        VecMag(Tgt[2]-Ref[2]), VecMag(Tgt[3]-Ref[3]) ) )
+
+    angl.write('{0} N(Phi:Psi): {1:5.1f}  {2:5.1f}  C(Phi:Psi): {3:5.1f}  {4:5.1f}\t|\t{5:5.1f}  {6:5.1f}  {7:5.1f}  {8:5.1f}\n'.format( 
+        Tgt[0], Tgt[4], Tgt[5], Tgt[6], Tgt[7],
+          (Tgt[4]-Ref[4]), (Tgt[5]-Ref[5]), (Tgt[6]-Ref[6]), (Tgt[7]-Ref[7]) ))
+
+    dist.write('{0} (N-H:C-H:N-C): {1:5.1f}  {2:5.1f}  {3:5.1f}\t|\t{4:5.1f}  {5:5.1f}  {6:5.1f}\n'.format(
+        Tgt[0], Tgt[8], Tgt[10], Tgt[9],
+          (Tgt[8]-Ref[8]), (Tgt[10]-Ref[10]), (Tgt[9]-Ref[9]) ))
+
+    if Tgt[11] is None:
+      helx.write('{0} (N-H:H-s|C-H:H-s): {1:5.1f}  \t|\t{3:5.1f}  {4:5.1f}\n'.format(
+        Tgt[0]))
+    else:
+      helx.write('{0} (N-H:H-s|C-H:H-s): {1:5.1f}  {2:5.1f}\t|\t{3:5.1f}  {4:5.1f}\n'.format(
+        Tgt[0], Tgt[11], Tgt[12], 
+          (Tgt[11]-Ref[11]), (Tgt[12]-Ref[12]) ))
+
+  angl.close()
+  dist.close()
+  helx.close()
+  cg.close()
+
+##########################################################################
+#
+#   Peter M.U. Ung  @ MSSM
+#   
+#   v0.1    17.01.30
+#   v0.2    17.02.01
+#   
+#   v1.0    17.02.02
+#   v1.1    17.02.02
+#
