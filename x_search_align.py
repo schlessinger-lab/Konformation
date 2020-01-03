@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 import sys,os,re
 import pandas as pd
@@ -129,7 +129,7 @@ def BlastpPairwiseIdentity( rst_dir, mdl_prot_fasta, fasta_database ):
   # Summarize the pieces into 1 by adding up the ratio
   Data = []
   for name in Ident:
-    length = sum(zip(*Ident[name])[1])  # rearrange tulip groups
+    length = sum(list(zip(*Ident[name]))[1])  # rearrange tulip groups
     x, y = 0.0, 0.0
     nm   = name.split('_')
 

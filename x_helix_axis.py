@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 import re,sys
 from pathos import multiprocessing
@@ -98,7 +98,7 @@ def HelixAxis( Input ):
   
   # reformat the backbone atoms N,CA,C array (bb_coords)
   try:
-    Coords = np.asarray(sum(zip(*Pre_Coords)[2],[]))
+    Coords = np.asarray(sum(list(zip(*Pre_Coords))[2],[]))
   except TypeError:
     print('\n  #2# Helix Warning: Cannot read data - TypeError: '+pdb_id)
     return None_Coord
@@ -168,9 +168,9 @@ def CalculateHelixAxis(Input):
 
   Fn1Pts, Fn2Pts = [], []
   for m in range(0,posit):
-    Fn1 = [LsqFit(range(xcount), Coords[m:m-posit, x],1) for x in range(3)]
+    Fn1 = [LsqFit(list(range(xcount)), Coords[m:m-posit, x],1) for x in range(3)]
     Fn1Pts.append( [np.asarray([f(x) for f in Fn1]) for x in range(count) ])
-    Fn2 = [LsqFit(range(xcount), Coords[m:m-posit, x],2) for x in range(3)]
+    Fn2 = [LsqFit(list(range(xcount)), Coords[m:m-posit, x],2) for x in range(3)]
     Fn2Pts.append( [np.asarray([f(x) for f in Fn2]) for x in range(count) ])
 
   H_Curv = [ CalcCurvature2(Fn2) for Fn2 in Fn2Pts ]
@@ -219,7 +219,7 @@ def HelixRadius(Coords, Reg2Pts, infile):
     sys.exit('\n  #2# Helix FATAL: no. of regression points does not match number of coord points: '+Coords[0])
   # Cylindrical coodinates of helix
   Dist  = [VecMag(Coords[i]-Reg2Pts[i]) for i in range(count)]
-  d     = np.poly1d(np.polyfit(range(count), Dist, 1, full=False))
+  d     = np.poly1d(np.polyfit(list(range(count)), Dist, 1, full=False))
   median, stdev = np.median(Dist), np.std(Dist)
 
   return median, stdev
@@ -239,7 +239,7 @@ def CalcCurvature2( Curve ):
   dr_dt     = np.gradient( Curve, axis=0 )
   d2r_dt2   = np.gradient( dr_dt, axis=0 )
   curvature = [ norm(np.cross(dr, d2r)) / (norm(dr)**3) 
-                for dr, d2r in zip(dr_dt, d2r_dt2) ]
+                for dr, d2r in list(zip(dr_dt, d2r_dt2)) ]
 
   # Take the curvature vector of middle of curve as representative
   if len(curvature) % 2 == 0:

@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 import re,os,glob,sys
 import numpy as np
@@ -55,9 +55,9 @@ class RCSpines( object ):
     Rsc  = [np.asarray(R_Seq[ArrayCent(len(R_Seq))][5]) for R_Seq in Input[5]]
     Rsac = Rsc+Rbb
 
-    Crd_r = np.asarray(zip(*Rsac))
+    Crd_r = np.asarray(list(zip(*Rsac)))
 
-    r_fn2 = [LsqFit(range(len(Crd_r[x])), Crd_r[x], 2) for x in range(3)]
+    r_fn2 = [LsqFit(list(range(len(Crd_r[x]))), Crd_r[x], 2) for x in range(3)]
     R_Pts = [np.asarray([f(x) for f in r_fn2]) for x in range(21)]
 
     # CalCurvature 1, 2, 3 have different codes but same equation, same result
@@ -75,9 +75,9 @@ class RCSpines( object ):
     Csc = [np.asarray(T_Seq[ArrayCent(len(T_Seq))][5]) for T_Seq in Input[6]]
     Cs  = Csc+Cbb
 
-    Crd_c = np.asarray(zip(*Cs))
+    Crd_c = np.asarray(list(zip(*Cs)))
 
-    c_fn2 = [LsqFit(range(len(Crd_c[x])), Crd_c[x], 2) for x in range(3)]
+    c_fn2 = [LsqFit(list(range(len(Crd_c[x]))), Crd_c[x], 2) for x in range(3)]
     C_Pts = [np.asarray([f(x) for f in c_fn2]) for x in range(21)]
 
     c_curv1 = CalcCurvature1(C_Pts)
@@ -117,8 +117,8 @@ class RCSpines( object ):
 ## Curvature calculation through Parametric 3-D (only) Cartesian coodinates
 def CalcCurvature3( Curve ):
   # older way to calculate 1st derivatives of list of curve pts in 3-dimension
-  x, y, z = zip(*Curve)    # dx_dt = np.gradient(x)
-  dr_dt = np.asarray( zip(np.gradient(x), np.gradient(y), np.gradient(z)) )
+  x, y, z = list(zip(*Curve))    # dx_dt = np.gradient(x)
+  dr_dt = np.asarray( list(zip(np.gradient(x),np.gradient(y),np.gradient(z))) )
   d2r_dt2   = np.gradient( dr_dt, axis=0 )
 
   ## Curvature of parametric Cartesian coordinates by r(i) = (x(i),y(i),z(i))
@@ -156,7 +156,7 @@ def CalcCurvature3( Curve ):
 def CalcCurvature1( Array_3D ):
 
   a = Array_3D
-  x, y, z = zip(*a)
+  x, y, z = list(zip(*a))
   # calculate the derivatives of each variable and put back as Velocity
   dx_dt = np.gradient(x)
   dy_dt = np.gradient(y)

@@ -1,0 +1,34 @@
+<orgPdbCompositeQuery version="1.0">
+    <resultCount>176</resultCount>
+    <queryId>75BDFEBB</queryId>
+ <queryRefinement>
+  <queryRefinementLevel>0</queryRefinementLevel>
+  <orgPdbQuery>
+    <version>head</version>
+    <queryType>org.pdb.query.simple.TreeQuery</queryType>
+    <description>EnzymeClassificationTree Search for 2.7.12.1: Dual-specificity kinase</description>
+    <queryId>D282F6BA</queryId>
+    <resultCount>176</resultCount>
+    <runtimeStart>2019-12-31T21:45:22Z</runtimeStart>
+    <runtimeMilliseconds>1</runtimeMilliseconds>
+    <t>3</t>
+    <n>4434</n>
+    <nodeDesc>2.7.12.1: Dual-specificity kinase</nodeDesc>
+  </orgPdbQuery>
+ </queryRefinement>
+ <queryRefinement>
+  <queryRefinementLevel>1</queryRefinementLevel>
+  <conjunctionType>and</conjunctionType>
+  <orgPdbQuery>
+    <version>head</version>
+    <queryType>org.pdb.query.simple.ExpTypeQuery</queryType>
+    <description>Experimental Method is X-RAY</description>
+    <queryId>F240F381</queryId>
+    <resultCount>141547</resultCount>
+    <runtimeStart>2019-12-31T21:36:20Z</runtimeStart>
+    <runtimeMilliseconds>1770</runtimeMilliseconds>
+    <mvStructure.expMethod.value>X-RAY</mvStructure.expMethod.value>
+    <mvStructure.expMethod.exclusive>y</mvStructure.expMethod.exclusive>
+  </orgPdbQuery>
+ </queryRefinement>
+</orgPdbCompositeQuery>

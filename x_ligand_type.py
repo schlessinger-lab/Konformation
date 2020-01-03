@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 import re,sys
 import numpy as np
@@ -156,7 +156,7 @@ def DescriptLigands(Ref, Tgt_List, Data):
       Lig = [ lig for lig in Tgt[7] if not Nucleotides(lig[1]) ]
       if len(Lig) > 1:
         Lig.sort(key=lambda x: x[3], reverse=True)
-        Data[pdb_id]['lig_multi'] = zip(*Lig)[1]
+        Data[pdb_id]['lig_multi'] = list(zip(*Lig))[1]
       Tt = Lig[0]
     else:
       Tt = Tgt[7][0]

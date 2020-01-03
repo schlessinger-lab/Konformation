@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 from pathos import multiprocessing
 from tqdm import tqdm
@@ -21,8 +21,8 @@ def DomainDistances( Ref_Coords, PDB_Coords, RefReg2, Reg2, Data, output ):
   mpi = multiprocessing.Pool(processes = multiprocessing.cpu_count())
   Ref = CalculateDist( [Ref_Coords, RefReg2] )
   Tmp = [CalculateDist([Tgt,Reg2[idx]]) for idx,Tgt in enumerate(PDB_Coords)]
-  #Tmp = [x for x in tqdm(mpi.imap_unordered( CalculateDist, zip(PDB_Coords, Reg2)),
-  #                                           total=len(zip(PDB_Coords, Reg2)))]
+#  Tmp = [x for x in tqdm(mpi.imap_unordered( CalculateDist, list(zip(PDB_Coords, Reg2))),
+#                                       total=len(Reg2))]
   mpi.close()
   mpi.join()
 

@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 # load all pdb that need to check for missing residues for correction
 import sys

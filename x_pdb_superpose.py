@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 ##########################################################################
 ##
@@ -58,18 +58,19 @@ msg = """\n  > {0}
 import re,os
 
 ##########################################################################
-def SuperposePDB( templ_pdb, Targets, extIn, extOt, resid, remove ):
+def SuperposePDB( templ_pdb, Targets, extIn, extOt, resid, outpref ):
   Targets.sort()
-  print('\n### Template structure file ###\n{0}\n'.format(templ_pdb))
-  print('\n### Target structure file(s) ###\n{0}\n'.format(Targets))
+  print('\n\033[34m### Template structure file ###\033[0m\n{0}'.format(templ_pdb))
+  print('\n\033[34m### Target structure file(s) ###\033[0m\n{0}\n'.format(len(Targets)))
 
   templ = templ_pdb.split('/')[-1].split('.pdb')[0]
-  AlignStructures(templ_pdb, resid, remove, Targets, extIn, extOt, 'super')
+  AlignStructures(templ_pdb, resid, outpref, Targets, extIn, extOt, 'super')
 
   ## Check pymol alignment Log
   Mdls, Atoms = [], []
   # Extract information from pymol-log file
-  with open('{0}.{1}.pymol-log'.format(templ,'super'), 'r') as fi:
+  pymol_pref = '{0}.{1}.{2}'.format(outpref, templ, 'super')
+  with open('{0}.pymol-log'.format(pymol_pref,'super'), 'r') as fi:
     for line in fi:
       if re.search(r'PyMOL>load', line):
         curr_pdb = line.split('load ')[1].split(', ')
@@ -86,7 +87,8 @@ def SuperposePDB( templ_pdb, Targets, extIn, extOt, resid, remove ):
 
   # Write out extracted information and identify bad alignment
   Aligns = []
-  with open('{0}.mod-super.log'.format(templ), 'w') as fo:
+  pymol_pref = '{0}.{1}.{2}'.format(outpref, templ, 'super')
+  with open('{0}.mod-super.log'.format(pymol_pref), 'w') as fo:
     # write to alignment, save models that fail to have 'enough atoms'
     for idx, Names in enumerate(Mdls):
       if Atoms[idx][1] < 60:
@@ -97,15 +99,15 @@ def SuperposePDB( templ_pdb, Targets, extIn, extOt, resid, remove ):
       fo.write('{0}: {1}'.format(Names[1], Atoms[idx][0]))
 
   ## Redo the alignment of models that failed the 'superimpose' with 'align'
-  AlignStructures(templ_pdb, resid, remove, Aligns, extIn, extOt, 'align')
+  AlignStructures(templ_pdb, resid, outpref, Aligns, extIn, extOt, 'align')
 
 
 ##########################################################################
 
-def AlignStructures(templ_pdb, resid, remove, Models, extIn, extOt, align_mode):
+def AlignStructures(templ_pdb, resid, outpref, Models, extIn, extOt, align_mode):
 
   templ = templ_pdb.split('/')[-1].split('.')[0]
-  pymol_pref = '{0}.{1}'.format(templ, align_mode)
+  pymol_pref = '{0}.{1}.{2}'.format(outpref, templ, align_mode)
   m = open(pymol_pref+'.pml','w')
 
   ## Load the Template PDB, with object name "templ"
@@ -120,18 +122,16 @@ def AlignStructures(templ_pdb, resid, remove, Models, extIn, extOt, align_mode):
     mod_name = model.split('/')[-1].split('.')[0]
     m.write('load {0}, {1}\n'.format(model, mod_name))
 
-    if remove is not None: 
-      m.write('remove {0} and {1}\n'.format(mod_name, remove))
-
     m.write('{0} {1}, {2}\n'.format(align_mode, mod_name, "templ_resid"))
     m.write('save {0}{1}, {2}\n'.format(mod_name, extOt, mod_name))
   
   m.write('hide everything\nshow ribbon\nshow lines, org\n')
-  m.write('color white, all\ncolor red, templ\n')
-  m.write('save pymol_{0}{1}.pse\n'.format(align_mode, extOt))  
+  m.write('color white, all\ncolor red, templ\ncenter templ\n')
+  m.write('save {0}.pse\n'.format(pymol_pref))
   m.close()
 
-  os.system('pymol -c {0}.pml > {0}.pymol-log'.format(pymol_pref))
+  os.system('pymol -c {0}.pml > {0}.pymol-log; wait'.format(pymol_pref))
+#  os.system('bzip2 -f {0}.pse *{1}'.format(pymol_pref, extOt))
 
 
 ##########################################################################

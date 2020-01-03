@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 
 import numpy as np
@@ -116,15 +116,15 @@ def DFGTorsions( Input ):
 
 
   # reformat the data array for DFG-D and DFG-F
-  D_CA_Coords = np.asarray(zip(*D_Coords)[3])
-  D_CG_Coords = np.asarray(zip(*D_Coords)[4])
-  D_CB_Coords = np.asarray(zip(*D_Coords)[6])
+  D_CA_Coords = np.asarray(list(zip(*D_Coords))[3])
+  D_CG_Coords = np.asarray(list(zip(*D_Coords))[4])
+  D_CB_Coords = np.asarray(list(zip(*D_Coords))[6])
   center = ArrayCent(len(D_CA_Coords))
   res_id = AA(D_Coords[center][0])+str(D_Coords[center][1])
 
-  F_CA_Coords = np.asarray(zip(*F_Coords)[3])
-  F_CG_Coords = np.asarray(zip(*F_Coords)[4])
-  F_CB_Coords = np.asarray(zip(*F_Coords)[6])
+  F_CA_Coords = np.asarray(list(zip(*F_Coords))[3])
+  F_CG_Coords = np.asarray(list(zip(*F_Coords))[4])
+  F_CB_Coords = np.asarray(list(zip(*F_Coords))[6])
   f_center = ArrayCent(len(F_CA_Coords))
   f_res_id = AA(F_Coords[f_center][0])+str(F_Coords[f_center][1])
 
