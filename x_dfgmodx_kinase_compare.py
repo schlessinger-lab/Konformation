@@ -7,8 +7,6 @@ import pandas as pd
 
 from Bio import SeqIO
 
-from CommonUtility import file_handle
-
 ##########################################################################
 # Calculate sequence identity and similarity of a query seq to a library of 
 # sequence (or single seq) and output a list with the best one at the 1st row
