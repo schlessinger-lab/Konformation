@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+
+import sys,os,re
+
+##########################################################################
+#
+#   Peter M.U. Ung @ MSSM
+#
+#   v1.   18.08.15
+#   v2.   20.02.18 - remove disordered atoms but keep the "A" variant
+
+#   replace modified PDB residues with the standard AA, and remove disordered
+#   atoms while keeping the "A" variant. The modified  residues are hidden 
+#   with REMARK
+#
+##########################################################################
+
+def ReplacePDBModifiedAA( in_pdb, out_pdb ):
+  name  = in_pdb.split('.pdb')[0]
+  with open(in_pdb, 'r') as fi:
+    Lines = [ l for l in fi ]
+
+  Edited = []
+  for l in Lines:
+
+    ### If found atoms with alternate conformation, keep "A" only
+    if re.search('^ATOM|^HETATM|^ANISOU', l) and l[16] != ' ':
+      if l[16] == 'A':
+        l = l[:16]+' '+l[17:]
+      else:
+        Edited.append('REMARK  CON '+l)
+        continue
+
+##################
+
+    ### If found hetero-group, check
+    if not re.search(r'HETATM', l):
+      Edited.append(l)
+    else:
+      ## Replace phospho- residues (Ser, Thr, Tyr, His)
+      if re.search(r'SEP|TPO|T8L|PTR|NEP', l):
+        Edited.append('REMARK  HET '+l)
+        m = re.sub('HETATM', 'ATOM  ', l)
+        if re.search(r'SEP', l):
+          n = re.sub('SEP', 'SER', m)
+        if re.search(r'TPO|T8L', l):
+          n = re.sub('TPO|T8L', 'THR', m)
+        if re.search(r'PTR', m):
+          n = re.sub('PTR', 'TYR', m)
+        if re.search(r'NEP', l):
+          n = re.sub('NEP', 'HIS', m)
+        if not re.search(r' P  |O1P|O2P|O3P| S1 ', n):
+          Edited.append(n)
+      ## Replace MSE with MET
+      elif re.search(r'MSE|MHO', l):
+        Edited.append('REMARK  HET '+l)
+        m = re.sub('HETATM', 'ATOM  ', l)
+        n = re.sub(r'MSE|MHO', 'MET', m)
+        o = re.sub('SE ', ' SD', n)
+        if not re.search(r'OD1', o):
+          Edited.append(o)
+      ## Replace modified CYS
+      elif re.search(r'CSO|OCS|CSX|CSD|2CO|CME|CSS', l):
+        Edited.append('REMARK  HET '+l)
+        m = re.sub('HETATM', 'ATOM  ', l)
+        n = re.sub(r'CSO|OCS|CSX|CSD|2CO|CME|CSS', 'CYS', m)
+        if not re.search(r' OD|OD1|OD2|OD3| OE| SD| CE| CZ| OH', n):
+          Edited.append(n)
+      ## Replace modified LYS
+      elif re.search(r'KCX|ALY|MLY', l):
+        Edited.append('REMARK  HET '+l)
+        m = re.sub('HETATM', 'ATOM  ', l)
+        n = re.sub(r'KCX|ALY|MLY', 'LYS', m)
+        if not re.search(r'CX |OQ1|OQ2|CH3|CH |OH |CH1|CH2', n):
+          Edited.append(n)
+      ## Replace modified ARG
+      elif re.search(r'NMM', l):
+        Edited.append('REMARK  HET '+l)
+        m = re.sub('HETATM', 'ATOM  ', l)
+        n = re.sub(r'NMM', 'ARG', m)
+        if not re.search(r'CAA', m):
+          Edited.append(n)
+      else:
+        Edited.append(l)
+
+
+  with open(out_pdb, 'w') as fo:
+    for l in Edited:
+      fo.write(l)
+
+########################################################################

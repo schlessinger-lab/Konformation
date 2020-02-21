@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import io
 import os
 import re
 import sys
@@ -7,8 +8,24 @@ import time
 import requests
 import pandas as pd
 
-from Bio import PDB
+from tqdm import tqdm
+from pathos import multiprocessing
 
+from Bio import PDB
+from Bio.PDB import Select
+
+from x_search_align import BlastpPairwiseIdentity
+from x_pdb_modif_resid import ReplacePDBModifiedAA
+
+#######################################################################################
+#
+#  v1.0  20.01.02
+#
+# Bug - 20.01.12 - Biopython 1.74/1.76 have issue with PDB writeout. v1.72 has no issue
+#   > AttributeError: 'Atom' object has no attribute 'disordered_get_list'
+#   to go around this issue, generate an intermediate file instead
+#
+#
 ############################################################################################
 ## search RCSB PDB site with predefined kinase search queries, 
 ## download those that are not in internal library already
@@ -84,28 +101,89 @@ def CheckExistingPDBs( pdb_list, known_pdbs ):
 
 
 ##########################################################################################
-## Download PDB from RCSB then extract the Chain of interest
-def DownloadNewPDB( work_dir, info ):
-  pdb_id, chain_id = info
+## Download PDB from RCSB then extract the Chain of interest, return path/name of PDB
+class DownloadNewPDB(object):
+  def __init__( self, work_dir='' ):
+    self.work_dir = work_dir
+  def __call__( self, info ):
+    return self.download_pdb( info )
 
-  ## BioPython downloads PDB but it gives a lowercase name in pdb{}.ent format
-  PDB.PDBList(verbose=False).retrieve_pdb_file(pdb_id, pdir=work_dir, obsolete=False, file_format='pdb')
-  biopdb_name = '{0}/pdb{1}.ent'.format(work_dir, pdb_id.lower())
+  def download_pdb( self,info ):
+    pdb_id, chain_id = info
 
-  ## Read the PDB file and extract the chain from structure[0]
-  model = PDB.PDBParser(PERMISSIVE=1,QUIET=True).get_structure(pdb_id, biopdb_name)[0]
+    ## Check if atom has alternative position, if so, keep 'A' position and remove the flag
+    ## but somehow this class doesn't seem to function well
+    class NotDisordered(Select):
+      def accept_atom(self, atom):
+        if not atom.is_disordered() or atom.get_altloc() == 'A':
+          atom.set_altloc(' ')
+          return True
+        else:
+          return False
 
-  io = PDB.PDBIO()
-  io.set_structure(model[chain_id])
-  io.save('{0}/{1}_{2}.pdb'.format(work_dir, pdb_id, chain_id))
-  os.system('mv {1} {0}/{2}.ent ; bzip2 -f {0}/{2}.ent'.format(work_dir, biopdb_name, pdb_id))
+    ## BioPython downloads PDB but it gives a lowercase name in pdb{}.ent format
+    biopdb_name = '{0}/pdb{1}.ent'.format(self.work_dir, pdb_id.lower())
+    biopdb_modf = '{0}/pdb{1}.mod.ent'.format(self.work_dir, pdb_id.lower())
+    if not os.path.isfile(biopdb_name):
+      try:
+        PDB.PDBList(verbose=False).retrieve_pdb_file(pdb_id, pdir=self.work_dir, obsolete=False, file_format='pdb')
+      except FileNotFoundError:
+        print('  \033[31m> ERROR: BioPython cannot download PDB: \033[0m'+pdb_id)
+        return None
 
-  return '{0}/{1}_{2}.pdb'.format(work_dir, pdb_id, chain_id)
+    ## Replace modified AA to avoid mis-recognition in biopython readin
+    ## Replace disordered atoms and keep only the "A" variant
+    ReplacePDBModifiedAA(biopdb_name, biopdb_modf)
+    os.system('grep "REMARK  " {0} > {0}.remark'.format(biopdb_modf))
+    with open(biopdb_modf, 'r') as fi:
+      remarks = [l for l in fi if re.search('REMARK HET ',l)]
+
+    ## Read the PDB file and extract the chain from structure[0]
+    try:
+      model = PDB.PDBParser(PERMISSIVE=1,QUIET=1).get_structure(pdb_id, biopdb_modf)[0]
+    except KeyError:
+      print('  \033[31m> ERROR: BioPython cannot read in PDB: \033[0m'+biopdb_modf)
+      return None
+
+    ### Bug alert: as of 20.02.18, Biopython dev hasn't come up with good
+    ### strategy to fix the 'atom.disordered_get_list()' issue with alternative
+    ### position of residue side chains. To go around this, will physically
+    ### remove "B" variant and keep only "A" variant in 
+    io = PDB.PDBIO()
+    io.set_structure(model[chain_id])
+    io.save('{0}/{1}_{2}.pdb'.format(self.work_dir, pdb_id, chain_id), 
+            select=NotDisordered())
+
+    # Attach REMARK to end of PDB as safekeeping
+    os.system('cat {0}/{1}_{2}.pdb {3}.remark > {1}.temp'.format(self.work_dir, pdb_id, chain_id, biopdb_modf))
+    os.system('mv {1}.temp {0}/{1}_{2}.pdb'.format(self.work_dir, pdb_id, chain_id))
+#    os.system('mv {1} {0}/{2}.ent'.format(self.work_dir, biopdb_name, pdb_id))
+#    os.system('bzip2 -f {0}/{1}.ent'.format(self.work_dir, pdb_id))
+#    os.system('rm {0} {0}.remark'.format(biopdb_modf))
+
+    return '{0}/{1}_{2}.pdb'.format(self.work_dir, pdb_id, chain_id)
 
 
 ############################################################################################
-  ## Check FASTA is kinase by comparing sequence identity to all human kinases
-  ## output is a Dictionary of pdb_id to chain_id
+def RunBlastDB( data ):
+  kinase_db, pdb_id, chain_id, pdb_idx, seq = data
+
+  fasta_file = '{0}_{1}.fasta'.format(pdb_id, chain_id)
+  with open(fasta_file, 'w') as fo:
+    fo.write('>'+pdb_idx+'\n'+seq+'\n')
+
+  Identity = BlastpPairwiseIdentity( '.', fasta_file, kinase_db )
+  if Identity is not None:
+    imat_df = pd.DataFrame(Identity, columns=['kinase','length','ident','simi'])
+  else:
+    imat_df = None
+
+  return [data, imat_df]
+
+
+############################################################################################
+## Check FASTA is kinase by comparing sequence identity to all canonical human kinases (kinome)
+## output is a Dictionary of pdb_id to chain_id
 def CheckKinaseSeqIdentity( uniq_f_df, kinase_db, len_cutoff, idt_cutoff, outpref ):
 
   # good:  length match > 175, seq ident > 40%
@@ -123,44 +201,50 @@ def CheckKinaseSeqIdentity( uniq_f_df, kinase_db, len_cutoff, idt_cutoff, outpre
 
   new_pdb_ids = []    # collection of confirmed kinases
   non_kin_idx = []    # collection of non-kinase pdb_idx
-  print('\n \033[34m## Comparing sequence identity of unique PDB FASTA ##\033[0m]')
-  for idx, x in tqdm(uniq_f_df.iterrows(), total=len(uniq_f_df)):
-    fasta_file = '{0}_{1}.fasta'.format(x.pdb_id, x.chain_id)
-    with open(fasta_file, 'w') as fo:
-      fo.write('>'+x.pdb_idx+'\n'+x.seq+'\n')
+  print('\n \033[34m## Comparing sequence identity of unique PDB FASTA ##\033[0m')
 
-    Data = BlastpPairwiseIdentity( '.', fasta_file, kinase_db )
-    if Data is None:
+  ## Run Blastp in parallel
+  Data = [[kinase_db, r.pdb_id, r.chain_id, r.pdb_idx, r.seq] for idx, r in uniq_f_df.iterrows()]
+  mpi  = multiprocessing.Pool()
+  df_l = [x for x in tqdm(mpi.imap(RunBlastDB, Data), total=len(Data))]
+  mpi.close()
+  mpi.join()
+
+  for items in df_l:
+    data, imat_df = items
+    kinase_db, pdb_id, chain_id, pdb_idx, seq = data
+    fasta_file = '{0}_{1}.fasta'.format(pdb_id, chain_id)
+
+    if imat_df is None:
       f_no.write(fasta_file+'\t no output\n')
       continue
-    imat_df = pd.DataFrame(Data, columns=['kinase','length','ident','simi'])
 
-    ## Hard cutoff of required matching to 175 residues, if fewer than 200 res,
+    ## Required matching to at least 200 residues as cutoff, if fewer than 200 res,
     ## unlikely to be a kinase catalytic domain. if seq ident < 40% of any 
-    ## known human kinases , need to check and confirm if it is a bacterial
-    ## or viral kinases; mammalian kinases are very similar, even chicken/fish
+    ## known human kinases, need to check and confirm if it is a bacterial
+    ## or viral kinases; mammalian kinases are very similar, even to chicken/fish
     sele_df = imat_df[ imat_df.length > (len_cutoff - 40) ]
-    info = '{0}_{1}\t{2}\t{3}\t{4}\n'.format(x.pdb_id, x.chain_id, 
+    info = '{0}_{1}\t{2}\t{3}\t{4}\n'.format(pdb_id, chain_id, 
                 imat_df.length[0], imat_df.ident[0], imat_df.simi[0])
 
     ## catch a strange error with ident.iloc[0] key error
     try:
       test = sele_df.ident
     except KeyError:
-      print('  \033[31mERROR:\033[0m "sele_df.ident[0]" - '+x.pdb_idx)
+      print('  \033[31mERROR:\033[0m "sele_df.ident[0]" - '+pdb_idx)
       continue
 
     if len(sele_df) == 0 or len(sele_df.ident) == 0:
-      non_kin_idx.append('{0}_{1}'.format(x.pdb_id, x.chain_id))
+      non_kin_idx.append('{0}_{1}'.format(pdb_id, chain_id))
       f_no.write(info)
       continue
     elif sele_df.ident.iloc[0] > idt_cutoff:
       f_ok.write(info)  
-      new_pdb_ids.append( [x.pdb_id, x.chain_id] )
+      new_pdb_ids.append( [pdb_id, chain_id] )
     elif sele_df.ident.iloc[0] > (idt_cutoff - 10.):
       f_chk.write(info)
     else:
-      non_kin_idx.append('{0}_{1}'.format(x.pdb_id, x.chain_id))
+      non_kin_idx.append('{0}_{1}'.format(pdb_id, chain_id))
       f_bad.write(info)
 
   f_bad.close()
@@ -174,7 +258,6 @@ def CheckKinaseSeqIdentity( uniq_f_df, kinase_db, len_cutoff, idt_cutoff, outpre
 
 
 ########################################################################
-
 
 ########### These Queries are generalized Keyword search #############
 ## Search RCSB Protein Data Bank using the 'AdvancedKeywordQuery' keywords:, then
@@ -316,4 +399,4 @@ def KinaseDownloadQueries( parms ):
     'NonSpec_tk':  n_tk_query,     # non-specific Tyr kinase
     'Recp_tk':     r_tk_query,     # receptor Tyr kinase
     'DualSpec_k':  dual_k_query    # dual-specific kinase
-    }
+  }

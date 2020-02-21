@@ -23,17 +23,20 @@
 import sys,os
 from pathos import multiprocessing
 from tqdm import tqdm
-from aa_residue     import *
-from x_data_coll    import *
-from x_r_c_spines   import *
-from x_dfg_torsion  import *
-from x_helix_axis   import *
-from x_domain_dist  import *
-from x_pdb_extract  import *
-from x_fasta_parse  import *
-from x_ligand_type  import *
-from x_konf_vars    import *
-from x_search_align import *
+
+#from aa_residue     import *
+from x_pdb_extract  import ParsePDB
+from x_data_coll    import Data2Pandas
+from x_data_coll    import BuildDataSet
+from x_pdb_extract  import CoordCorrect
+from x_fasta_parse  import RefFastaColumn
+from x_fasta_parse  import FastaFromColumn
+from x_ligand_type  import DescriptLigands
+from x_dfg_torsion  import DFGTorsionAngle
+from x_domain_dist  import DomainDistances
+from x_search_align import CacheSeqDatabase
+from x_helix_axis   import HelixMeasurements
+
 from Bio import SeqIO
 from Bio.PDB.PDBParser import PDBParser
 p = PDBParser(PERMISSIVE=1, QUIET=True)
@@ -43,7 +46,7 @@ def Konformation( RefRes, Query_PDB, output, **kwargs ):
 
   # Read in aligned fasta library for the PDB
   Fasta_Lib = CacheSeqDatabase(RefRes['FASTA'])
-  print(' ** Found number of aligned FASTA entries: '+str(len(Fasta_Lib)))
+  print(' ** Found number of aligned FASTA entries: \033[31m{}\033[0m'.format(len(Fasta_Lib)))
 
   # Create master parameter database for all query PDBs, including Ref PDB
   PDB_Data = {}
@@ -51,8 +54,8 @@ def Konformation( RefRes, Query_PDB, output, **kwargs ):
   for pdb in Query_PDB:
     pdb_id = pdb.split('/')[-1].split('.')[0]
     PDB_Data[pdb_id] = BuildDataSet()
-    PDB_Data[pdb_id]['pdb_id'] = pdb_id
     PDB_Data[pdb_id]['pdb']    = pdb
+    PDB_Data[pdb_id]['pdb_id'] = pdb_id
 
 
   ParameterCalculations( RefRes, Query_PDB, Fasta_Lib, PDB_Data, output )
@@ -67,12 +70,15 @@ def ParameterCalculations( RefRes, Query_PDB, Fasta_Lib, PDB_Data, output ):
   ref_pdb   = RefRes['REFPDB']
   pdb_dir   = RefRes['PDBDIR']
   missing   = RefRes['MISSRES']
+  ## primary seq sets for key recognition sites
   helix_res = RefRes['HELIX']
   n_dom_res = RefRes['NDOM']
   c_dom_res = RefRes['CDOM']
   dfg_f_res = RefRes['DFGF']
   gate_res  = RefRes['GATE']
 
+  ## if failed with primary set, try alternative seq that takes last residues
+  ## alternative seq sets for key recognition sites, the last resid
   xheli_res = RefRes['XHELIX']
   zndom_res = RefRes['ZNDOM']
   zcdom_res = RefRes['ZCDOM']
@@ -80,8 +86,8 @@ def ParameterCalculations( RefRes, Query_PDB, Fasta_Lib, PDB_Data, output ):
 
   # Read in Reference PDB, extract the helix residues and domain resid columns,
   ref_pdb_id = ref_pdb.split('/')[-1].split('.')[0]
-  print('\n### Extract reference PDB coordinates and parameters ###')
-  print('>>>> Reference PDB: '+ref_pdb_id)
+  print('\n\033[34m### Extract reference PDB coordinates and parameters ###\033[0m')
+  print('>>>> Reference PDB: \033[31m{}\033[0m'.format(ref_pdb_id))
   ref_helix, helix_column = RefFastaColumn(Fasta_Lib, helix_res, ref_pdb_id)
   ref_n_dom, n_dom_column = RefFastaColumn(Fasta_Lib, n_dom_res, ref_pdb_id)
   ref_c_dom, c_dom_column = RefFastaColumn(Fasta_Lib, c_dom_res, ref_pdb_id)
@@ -134,19 +140,19 @@ def ParameterCalculations( RefRes, Query_PDB, Fasta_Lib, PDB_Data, output ):
   Ref_Coords = pRef.extract_pdb(ref_pdb)
   
   # Calculate the query PDBs helix axis and C-helix parameters
-  mpi  = multiprocessing.Pool(processes = multiprocessing.cpu_count())
+  mpi  = multiprocessing.Pool()
   pPDB = ParsePDB( h_seq=Helix_Seq, n_seq=N_Dom_Seq, c_seq=C_Dom_Seq,
                    g_seq=Gate_Seq,  f_seq=DFG_F_Seq, t_seq=Cs_Seq,
                    pdb_dir=pdb_dir, corr=CoordCorrect(missing, pdb_dir) )
-#  Tmp  = [pPDB(pdb) for pdb in Query_PDB]
-  Tmp  = [x for x in tqdm(mpi.imap_unordered(pPDB,Query_PDB),total=len(Query_PDB))]
+  Tmp  = [pPDB(pdb) for pdb in tqdm(Query_PDB)]
+#  Tmp  = [x for x in tqdm(mpi.imap(pPDB,Query_PDB),total=len(Query_PDB))]
   mpi.close()
   mpi.join()
 
   # PDB_Coords = [pdb_name, H_Crds, N_Crds, C_Crds, G_Crds, F_Crds, T_Crds]
   PDB_Coords = [Itm for Itm in Tmp if Itm is not None]
-#  PDB_Coords = Tmp
-  print('\n## Input Query: {0} - Accepted: {1}\n'.format(
+
+  print('\n ## Input Query: {0} - Accepted: \033[31m{1}\033[0m\n'.format(
         len(Tmp), len(PDB_Coords)))
   os.system('cat _TEMP.missing.* > '+output+'.missing.txt; rm _TEMP.missing.*')
 

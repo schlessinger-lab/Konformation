@@ -4,11 +4,10 @@ import sys,os,re
 import pandas as pd
 
 from Bio import SeqIO
-from Bio.Seq import Seq
-from Bio.SeqRecord import SeqRecord
+#from Bio.Seq import Seq
 from Bio.PDB import PDBIO
-from Bio.PDB.PDBIO import Select
-from Bio.PDB.PDBParser   import PDBParser
+from Bio.SeqRecord import SeqRecord
+from Bio.PDB.PDBParser import PDBParser
 from Bio.PDB.Polypeptide import PPBuilder
 p = PDBParser(PERMISSIVE=1, QUIET=True)
 
@@ -17,17 +16,17 @@ p = PDBParser(PERMISSIVE=1, QUIET=True)
 class GenerateProfileAlignment( object ):
 
   def __init__( self, hom_dir=None, tmp_dir=None, rst_dir=None,
-                      ref_pdb=None, f_bdb=None,   f_dic=None    ):
+                      ref_pdb=None, f_nogap=None,   f_dict=None    ):
     self.tmp_dir = tmp_dir
     self.hom_dir = hom_dir
     self.rst_dir = rst_dir
     self.ref_pdb = ref_pdb
-    self.f_bdb = f_bdb
-    self.f_dic = f_dic
-    
+    self.f_nogap = f_nogap
+    self.f_dict  = f_dict
+
   def __call__( self, pdb ):
     return self.ProfileAlignment( pdb )
-  
+
   def ProfileAlignment( self, pdb ):
     
     # work on the target PDB
@@ -37,36 +36,38 @@ class GenerateProfileAlignment( object ):
       SeqIO.write(fasta, fo, 'fasta')
 
     Identity = BlastpPairwiseIdentity( self.tmp_dir, 
-                 '_TEMP.tget.{0}.fasta'.format(pdb_id), self.f_bdb )
+                '_TEMP.tget.{0}.fasta'.format(pdb_id), self.f_nogap )
 
     # Handle input that may not be kinase (very low identity) and not include
     # them in the next round of process
     if Identity is None:
+      print('\n  \033[31m#2# Alignment Warning: No match to any kinase: \033[31m{0}\033[0m'.format(pdb_id))
       return None
     elif Identity[0][2] < 30.0:
-      print('''\n  #2# Alignment Warning: Sure this is a kinase? Low sequence identity to even the best matching kinase {0} x {1}: {2:4.1%}%'''.format(pdb_id, Identity[0][0], Identity[0][2]))
+      print('\n  \033[31m#2# Alignment Warning:\033[0m Seq identity \033[31m< 30%\033[0m to any kinase {0} x {1}: {2:4.1%}%'.format(pdb_id, Identity[0][0], Identity[0][2]))
       return None
     else:
       # Write out top most similar sequence to the input sequence for alignment
       # Result appears to be more consistent and better than using MSA
       with open('_TEMP.prof.{0}.fasta'.format(pdb_id), 'w') as fo:
-        SeqIO.write(self.f_dic[self.ref_pdb], fo, 'fasta')
+        SeqIO.write(self.f_dict[self.ref_pdb], fo, 'fasta')
         for item in Identity[0:1]:
-          print('# Most similar Xtal for {0}: {1} - {2} - {3}'.format(
-                     pdb_id, item[0], item[1], item[2]) )
-          SeqIO.write(self.f_dic[item[0]], fo, 'fasta')
+#          print('# Most similar Kinase for {0}: {1} - {2}'.format(
+#                    pdb_id, item[0], item[1]) )
+          SeqIO.write(self.f_dict[item[0]], fo, 'fasta')
 
-    # Align target seq to Profile seq, extract the aligned target seq
-      ProfileAlignment( 
+    # use Muscle to align target seq to Profile seq, extract the aligned target seq
+      MuscleProfileAlignment( 
           '_TEMP.prof.{0}.fasta'.format(pdb_id),
           '_TEMP.tget.{0}.fasta'.format(pdb_id),
           '_TEMP.comb.{0}.fasta'.format(pdb_id)  )
 
       Data = CacheSeqDatabase('_TEMP.comb.{0}.fasta'.format(pdb_id))
 
+    os.system('rm _TEMP.prof.{0}.fasta _TEMP.tget.{0}.fasta _TEMP.comb.{0}.fasta'.format(pdb_id))
     return Data[pdb_id]
 
-  
+
 ##########################################################################
 # Use Blastp to generate pairwise percent identity between a query sequence
 # and a database of sequences. Do not generate a matrix of pairwise identity
@@ -76,26 +77,18 @@ class GenerateProfileAlignment( object ):
 # Only takes in ungapped sequences.
 def BlastpPairwiseIdentity( rst_dir, mdl_prot_fasta, fasta_database ):
 
-  # sort selection: percent identity (default) or percent positive (similarity)
-  # '2' is 2nd column, percent identity; '3' is similarity column
-  sort_select = 'ident'
-  if re.search(r'posi', sort_select, re.IGNORECASE):
-    sort_select = 3
-  else:
-    sort_select = 2
-
   # If input Fasta is a file, reconfigure to only the fasta name
   if os.path.isfile(mdl_prot_fasta):
     fasta_name = mdl_prot_fasta.split('.fasta')[0]
   else:
     fasta_name = mdl_prot_fasta
 
-  print('\n  ** Calculate Sequence Identity between Query and Database Sequences **')
-  print('  Query Fasta:    {0}.fasta'.format(fasta_name))
-  print('  Fasta Database: '+fasta_database)
+#  print('\n  \033[34m** Calculate Sequence Identity between Query and Database Sequences **\033[0m')
+#  print('  Query Fasta:    {0}.fasta'.format(fasta_name))
+#  print('  Fasta Database: '+fasta_database)
   # blastp to output: Name, AA_length, percent identity, percent positive
   # result in .csv format, omit other irrelevant data
-  os.system('blastp -query "{0}.fasta" -db "{1}" -max_target_seqs 5000 -out "{2}/{3}.idmat.txt" -outfmt "6 sseqid length pident ppos"'.format(fasta_name, fasta_database, rst_dir, fasta_name.split('/')[-1]))
+  os.system('blastp -query "{0}.fasta" -subject "{1}" -max_target_seqs 5000 -out "{2}/{3}.idmat.txt" -outfmt "6 sseqid length pident ppos"'.format(fasta_name, fasta_database, rst_dir, fasta_name.split('/')[-1]))
 
   # Parse percent identity result generated by BlastP. Did not use clustalo or
   # t_coffee because they do redundent pairwise identity calculation for other
@@ -103,22 +96,24 @@ def BlastpPairwiseIdentity( rst_dir, mdl_prot_fasta, fasta_database ):
   # pairwise identity between query sequence and the database sequences.
   # Sometimes non-kinase sequence will fail in Blastp (ASCT2 2nww.pdb). Return 0
   if not os.path.isfile('{0}/{1}.idmat.txt'.format(
-                         rst_dir, fasta_name.split('/')[-1])):
-    print('\n  #2# Alignment Warning: Cannot find Blastp output. Seq identity to kinase too low? '+fasta_name)
+                          rst_dir, fasta_name.split('/')[-1])):
+    print('\n  \033[31m#2# Alignment Warning:\033[0m Cannot find Blastp output. Seq identity to kinase too low? '+fasta_name)
     return None
   elif os.stat('{0}/{1}.idmat.txt'.format(
-                         rst_dir, fasta_name.split('/')[-1])).st_size == 0:
-    print('\n  #2# Alignment Warning: Blastp failed. Seq Identity to kinase too low? '+fasta_name)
+                          rst_dir, fasta_name.split('/')[-1])).st_size == 0:
+    print('\n  \033[31m#2# Alignment Warning:\033[0m Blastp failed. Seq Identity to kinase too low? '+fasta_name)
     return None
 
+  ## Extract the identity information from Blastp result; sometimes a chain is
+  ## broken into fragments, need to combine them according to residue ratios
   Ident = {}
   with open('{0}/{1}.idmat.txt'.format(
-             rst_dir, fasta_name.split('/')[-1]), 'rU') as fi:
+              rst_dir, fasta_name.split('/')[-1]), 'r') as fi:
 
     for line in fi:
       Items = line.split('\t')
       name, aa, identity, positive = ( Items[0].split('|')[0], int(Items[1]),
-                                       float(Items[2]), float(Items[3]) )
+                                        float(Items[2]), float(Items[3]) )
       if name in Ident:
         Ident[name].append( [name, aa, identity, positive] )
       else:
@@ -131,41 +126,34 @@ def BlastpPairwiseIdentity( rst_dir, mdl_prot_fasta, fasta_database ):
   for name in Ident:
     length = sum(list(zip(*Ident[name]))[1])  # rearrange tulip groups
     x, y = 0.0, 0.0
-    nm   = name.split('_')
-
-    if enumerate(nm) != 2:
-      nm.append('A')
 
     for row in Ident[name]:
       x += row[1] * row[2]
       y += row[1] * row[3]
 
-    Data.append( [nm[0], nm[1], length, (x/length), (y/length)] )
+    Data.append( [name, length, (x/length), (y/length)] )
 
 ############################
   # sort the dataset by percent identity or positive, then by available length,
   # then by filename to prefer A or B, etc
   pdata = pd.DataFrame(Data)
-  pdata.columns = ['pdb_id', 'chain', 'length', 'identity', 'similarity']
-  pdata['pdb_full'] = pdata['pdb_id']+'_'+pdata['chain']
+  pdata.columns = ['kinase', 'length', 'identity', 'similarity']
 
-  pdata = pdata.sort_values( by=['identity', 'length', 'chain'], 
-                             ascending=[False, False, True] )
-  pdata_temp = pdata.drop('pdb_id',1).drop('chain',1)
+  # sort selection: percent identity then by length
+  pdata_temp = pdata.sort_values( by=['identity', 'length'], ascending=[False, False] )
   col = pdata_temp.columns.tolist()
   col = col[-1:] + col[:-1]
   pdata_temp = pdata_temp[col]
   pdata = pdata_temp
 
-  pdata.to_csv('{0}/{1}.idmat.sort.txt'.format( rst_dir, 
-                          fasta_name.split('/')[-1]), sep='\t', 
-                          encoding='utf-8', float_format='%4.2f', 
-                          index=False )
+  pdata.to_csv('{0}/{1}.idmat.sort.txt'.format( rst_dir, fasta_name.split('/')[-1]), 
+                sep='\t', encoding='utf-8', float_format='%4.2f', index=False )
+
+  os.system('rm {0}/{1}.idmat.txt {0}/{1}.idmat.sort.txt'.format(rst_dir, fasta_name.split('/')[-1]))
 
   Data = []
-  for idx, row in pdata.iterrows():
-    Data.append( [ row['pdb_full'], row['length'], row['identity'], 
-                   row['similarity'] ] )
+  for idx, r in pdata.iterrows():
+    Data.append( [ r.kinase, r.length, r.identity, r.similarity ] )
 
   return Data
 
@@ -181,36 +169,42 @@ def CheckInputStructures( pdb ):
   hom_dir  = pdb.split('{0}'.format(pdb_name))[0]
 
   m = p.get_structure(pdb_id, pdb)
-  c = m.get_chains()
-  C = [c for c in m.get_chains()]
   print('\n  #1# Superpose Info: Input PDB {0} has {1:2d} chain(s)'.format(
-                pdb_name, len(C) ))
+                pdb_name, len(m.get_chains()) ))
 
   Targets = []
+  # get individual chains in PDB and check
   for chain in m.get_chains():
     chain_id = chain.get_id()
     Res      = chain.get_residues()
-    if len([r for r in Res if not re.search(r'H_|W', r.get_id()[0])]) < 235:
-      print('\n  #2# Superpose Warning: {0}_{1} has < 235 residues, unlikely a kinase. Skip this chain.'.format( pdb_id, chain_id ))
+    if len([r for r in Res if not re.search(r'H_|W', r.get_id()[0])]) < 220:
+      print('\n  \033[31m#2# Superpose Warning:\033[0m {0}_{1} has < 220 residues, unlikely a kinase. Skip this chain.'.format( pdb_id, chain_id ))
     else:
-      new_pdb = '{0}{1}_{2}.pdb'.format(hom_dir, pdb_id, chain_id)
+      if re.search(r'_', pdb_id):
+        if re.search('{}'.format(chain_id), pdb_id.split('_')[-1] ):
+          new_pdb = '{0}/{1}.pdb'.format(hom_dir, pdb_id, chain_id)
+        else:
+          new_pdb = '{0}/{1}_{2}.pdb'.format(hom_dir, pdb_id, chain_id)
+      else:
+        new_pdb = '{0}/{1}_{2}.pdb'.format(hom_dir, pdb_id, chain_id)
+
       w = PDBIO()
       w.set_structure(chain)
       w.save(new_pdb)
       Targets.append(new_pdb)
-  
+
   return Targets
-  
+
 
 ##########################################################################
 ## Create a cache database of known Xtal PDB alignments
 ## Reformat the FASTA header, PDB naming is split by '|', convert ':' to '_'
 ## Remove 'description' or it will mess up the fasta header
-def CacheSeqDatabase( fasta_database ):
+def CacheSeqDatabase( fasta_file ):
 
-  print('\n  ## Caching sequence database: '+fasta_database+'\n')
+#  print('\n  \033[34m## Caching sequence database:\033[0m '+fasta_file+'\n')
   Database = {}
-  for seq_record in SeqIO.parse(fasta_database, 'fasta'):
+  for seq_record in SeqIO.parse(fasta_file, 'fasta'):
     new_id = seq_record.id.split('|')[0].replace(':', '_')
     seq_record.description = ''
     seq_record.id = new_id
@@ -223,28 +217,49 @@ def CacheSeqDatabase( fasta_database ):
 # Generate the FASTA sequence from the PDB structure, using BioPython
 def FASTA_Gen( pdb_name, pdb_id ):
 
-  print(' # Convert PDB into FASTA for: {0} - {1}\n'.format(pdb_name, pdb_id))
+#  print('\n  ## Convert PDB into FASTA for: \033[31m{0} - {1}\033[0m\n'.format(pdb_name, pdb_id))
   peptide = PPBuilder().build_peptides( p.get_structure(pdb_id, pdb_name) )
 
   seq = ''
   for residue in peptide: 
     seq = seq + residue.get_sequence()
   seq_obj = SeqRecord( seq, id=pdb_id, description='' )
-  
+
   return seq_obj
 
 
 ##########################################################################
 ## Muscle to perform profile alignment
-def ProfileAlignment( profile_fasta, target_fasta, output_fasta ):
+## Alignment using a pre-existing MSA profile. T-Coffee has issue with this. 
+## MUSCLE and ClustalO came out about same time, 2004 and 2003, MUSCLE performs
+## the best especially when doing single-seq profile alignment. Output the 
+## profile-aligned fasta object
+## Penalities for gap opening and extension are modified to enforce the new 
+## alignment adopt the same gapping as the profile sequence. See examples:
+## http://www.drive5.com/muscle/muscle_userguide3.8.html
+## https://www.dnastar.com/manuals/MegAlignPro/15.3/en/topic/muscle-alignment-options
+def MuscleProfileAlignment( profile_fasta, target_fasta, output_fasta ):
 
-  os.system('muscle -profile -in1 {0} -in2 {1} -out {2} -maxiters 64'.format(
+  x = 'muscle -profile -in1 {0} -in2 {1} -out {2} -maxiters 64 -seqtype protein -gapopen -5.0 -gapextend -2.0 -center 0.0 -quiet'.format(
+              profile_fasta, target_fasta, output_fasta )
+#  print(x)
+  os.system('muscle -profile -in1 {0} -in2 {1} -out {2} -maxiters 64 -seqtype protein -gapopen -5.0 -gapextend -2.0 -center 0.0 -quiet'.format(
               profile_fasta, target_fasta, output_fasta ))
 
- 
+
+##########################################################################
+# Reformat and no alignment: Remove empty gap column from aligned FASTA file
+# the '-action +rm_gap <% empty>' tag indicate which columns to remove, if
+# column contains <% empty> seq that are empty in that column
+# if not include '-action +rm_gap <>' flag, all '-' will be removed
+def RemoveFastaGapColumn( fasta_input, fasta_output ):
+
+  os.system('t_coffee -other_pg seq_reformat -in "{0}" -action +rm_gap 100 -output=fasta > {1}'.format(fasta_input, fasta_output))
+
+
 ##########################################################################
 #
 #   v1.0  18.03.11
-#
+#   v2.0  20.01.12
 #
 #

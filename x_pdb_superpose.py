@@ -35,22 +35,23 @@
 
 import sys
 
-msg = """\n  > {0} 
+msg = """\n  > {0}
+      [PyMOL executable]
       [Template Structure] [Model Structure(s)]
       [Input Model File Extension] [Output Model File Extension]
 
       -a=[Template residues for alignment: -a=(PyMOL format)]
       -r=[Remove ligands, ions, or water: -r=(PyMOL format)]\n
-     #  Using PyMOL function "super" to superimpose all model structures
-     #  to the supplied Template structure.\n
-     #  Specifying residues for alignment in PyMOL format. 
+      #  Using PyMOL function "super" to superimpose all model structures
+      #  to the supplied Template structure.\n
+      #  Specifying residues for alignment in PyMOL format. 
         e.g. 'resi 10-20+30-120'
-     #  Specifying residues for removal in PyMOL format. 
-        e.g. 'resname HOH+CL+NA+SO4+PO4+UNX' or 
-             'not poly and not org and not resname MG+MN'\n
+      #  Specifying residues for removal in PyMOL format. 
+        e.g.  'resname HOH+CL+NA+SO4+PO4+UNX' or 
+              'not poly and not org and not resname MG+MN'\n
       e.g. > {0}
-         template.pdb 'model.*.pdb' pdb mod.pdb -a='resi 12'\n
-     # For most kinases: 1ATP 'resi 122-183+162-183'\n""".format(sys.argv[0])
+        /usr/bin/pymol template.pdb 'model.*.pdb' pdb mod.pdb -a='resi 12'\n
+      # For most kinases: 1ATP 'resi 122-183+162-183'\n""".format(sys.argv[0])
 #if len(sys.argv) < 5 or len(sys.argv) > 8: sys.exit(msg)
 #print("### Input variables ###\n{0}\n".format(sys.argv))
 
@@ -58,13 +59,13 @@ msg = """\n  > {0}
 import re,os
 
 ##########################################################################
-def SuperposePDB( templ_pdb, Targets, extIn, extOt, resid, outpref ):
+def SuperposePDB( pymol_exec, templ_pdb, Targets, extIn, extOt, resid, outpref ):
   Targets.sort()
   print('\n\033[34m### Template structure file ###\033[0m\n{0}'.format(templ_pdb))
   print('\n\033[34m### Target structure file(s) ###\033[0m\n{0}\n'.format(len(Targets)))
 
   templ = templ_pdb.split('/')[-1].split('.pdb')[0]
-  AlignStructures(templ_pdb, resid, outpref, Targets, extIn, extOt, 'super')
+  AlignStructures(pymol_exec, templ_pdb, resid, outpref, Targets, extIn, extOt, 'super')
 
   ## Check pymol alignment Log
   Mdls, Atoms = [], []
@@ -96,15 +97,16 @@ def SuperposePDB( templ_pdb, Targets, extIn, extOt, resid, outpref ):
         print('     Atom: {0} -- fewer than threshold 60'.format(Atoms[idx][1]))
         fo.write('\n  #1# Superpose Warning: Check {0}: atom < 60\n'.format(Names[0]))
         Aligns.append(Names[0])
-      fo.write('{0}: {1}'.format(Names[1], Atoms[idx][0]))
+      fo.write('{0} : {1}'.format(Names[1].rstrip(), Atoms[idx][0]))
 
   ## Redo the alignment of models that failed the 'superimpose' with 'align'
-  AlignStructures(templ_pdb, resid, outpref, Aligns, extIn, extOt, 'align')
+  AlignStructures(pymol_exec, templ_pdb, resid, outpref, Aligns, extIn, extOt, 'align')
 
 
 ##########################################################################
 
-def AlignStructures(templ_pdb, resid, outpref, Models, extIn, extOt, align_mode):
+def AlignStructures( pymol_exec, templ_pdb, resid, outpref, Models, 
+                      extIn, extOt, align_mode ):
 
   templ = templ_pdb.split('/')[-1].split('.')[0]
   pymol_pref = '{0}.{1}.{2}'.format(outpref, templ, align_mode)
@@ -123,15 +125,15 @@ def AlignStructures(templ_pdb, resid, outpref, Models, extIn, extOt, align_mode)
     m.write('load {0}, {1}\n'.format(model, mod_name))
 
     m.write('{0} {1}, {2}\n'.format(align_mode, mod_name, "templ_resid"))
-    m.write('save {0}{1}, {2}\n'.format(mod_name, extOt, mod_name))
+    m.write('save {0}.{1}, {2}\n'.format(mod_name, extOt, mod_name))
   
   m.write('hide everything\nshow ribbon\nshow lines, org\n')
   m.write('color white, all\ncolor red, templ\ncenter templ\n')
   m.write('save {0}.pse\n'.format(pymol_pref))
   m.close()
 
-  os.system('pymol -c {0}.pml > {0}.pymol-log; wait'.format(pymol_pref))
-#  os.system('bzip2 -f {0}.pse *{1}'.format(pymol_pref, extOt))
+  os.system('{0} -c {1}.pml > {1}.pymol-log; wait'.format(pymol_exec, pymol_pref))
+#  os.system('bzip2 -f {0}.pse *.{1}'.format(pymol_pref, extOt))
 
 
 ##########################################################################

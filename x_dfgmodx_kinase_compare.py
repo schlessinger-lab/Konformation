@@ -44,7 +44,7 @@ def BlastpPairwiseIdentity( result_directory, mdl_prot_fasta, kinase_profile ):
   ## Extract the identity information from Blastp result; sometimes a chain is
   ## broken into fragments, need to combine them according to residue ratios
   Ident = {}
-  with open('{0}/{1}.idmat.txt'.format(result_directory, fasta_name.split('/')[-1]), 'rU') as fi:
+  with open('{0}/{1}.idmat.txt'.format(result_directory, fasta_name.split('/')[-1]), 'r') as fi:
     for line in fi:
       Items = line.split('\t')
       name, aa, identity, positive = (Items[0].split('|')[0], int(Items[1]), 

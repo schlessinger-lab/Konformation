@@ -14,6 +14,10 @@ def CheckSequence(Seq):
 ## Get the sequence from the reference PDB file
 def RefFastaColumn(Fasta_Lib, residues, name):
 
+  ## if name is a full path, remove path, else, use directly
+  if re.search(r'/', name):
+    name = name.split('/')[-1]
+  print(name)
   seq = str(Fasta_Lib[name].seq)
 
   # Find the sequence by the 5/7-resid code in (D-2,D-1,D,D+1,D+2) format
@@ -23,7 +27,7 @@ def RefFastaColumn(Fasta_Lib, residues, name):
     column = m.start(0)
   
   Set = {}
-  Set[name.split('.')[0]] = list(residues)
+  Set[name.split('.')[0]] = (residues)
   print(' reference sequence:\t'+residues)
   print(' Column in Fasta:\t'+str(column+1))  # convert from 'start 0' to 1
   return Set, column

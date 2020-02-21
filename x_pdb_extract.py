@@ -2,11 +2,12 @@
 
 import re,os,sys
 import numpy as np
-from x_helix_axis  import *
-from x_fasta_parse import *
-from x_dfg_torsion import *
-from x_ligand_type import *
 from aa_residue import AA
+#from x_helix_axis  import *
+#from x_dfg_torsion import *
+from x_fasta_parse import CheckSequence
+from x_ligand_type import LigPocketOccupy
+
 from Bio import SeqIO
 from Bio.PDB.PDBParser import PDBParser
 p = PDBParser(PERMISSIVE=1)
@@ -36,16 +37,16 @@ class ParsePDB(object):
     
     pdb_name = pdb.split('/')[-1]
     pdb_id   = pdb.split('/')[-1].split('.')[0]
-    with open('_TEMP.missing.'+pdb_name, 'wh') as missing:
+    with open('_TEMP.missing.'+pdb_name, 'w') as missing:
       print('>>> Current PDB: '+pdb_id)
 
       # Skip if protein is not found in fasta library or sequence has blank 
       # residue '-' in the sequence
       if pdb_id not in self.h_seq:
-        print('\n  #2# PDB Warning: Cannot find in FASTA library: '+pdb_id)
+        print('\n  \033[31m#2# PDB Skip:\033[0m Cannot find in FASTA library: '+pdb_id)
         return None
       if CheckSequence( self.h_seq[pdb_id] ) is False:
-        print('\n  #2# PDB Warning: FASTA has missing residue: {0} - {1}'.format(
+        print('\n  \033[31m#2# PDB Warning:\033[0m FASTA has missing residue: {0} - {1}'.format(
               pdb_id, str(self.h_seq[pdb_id]) ))
         return None
 
@@ -54,9 +55,9 @@ class ParsePDB(object):
         if not p_dir:
           continue
         if re.search(r'~', p_dir):
-          sys.exit('\n  #2# PDB FATAL: Python does not recognize "~" home directory\n            Use full directory name: '+p_dir)
+          sys.exit('\n  \033[31m#2# PDB FATAL:\033[0m Python does not recognize "~" home directory\n            Use full directory name: '+p_dir)
         if not os.path.isfile( pdb ):
-          sys.exit('\n  #2# PDB FATAL: PDB not found in directory: '+pdb_name)
+          sys.exit('\n  \033[31m#2# PDB FATAL:\033[0m PDB not found in directory: '+pdb_name)
 
       pdb_obj = p.get_structure(pdb_name, pdb)
 
@@ -68,8 +69,9 @@ class ParsePDB(object):
       F_Crds = ExtractPDBCoords( pdb_obj, self.f_seq[pdb_id], 4 ) # (DFG_F)
       G_Crds = ExtractPDBCoords( pdb_obj, self.g_seq[pdb_id], 3 ) # (Gate)
 
-#      R_Crds=[] # [ExtractPDBCoords(pdb_obj, seq[pdb_id]) for seq in self.r_seq]
-      T_Crds=[] # [ExtractPDBCoords(pdb_obj, seq[pdb_id]) for seq in self.t_seq]
+      ## R- and C-spines residues are already coming in as list(dict of seq)
+      R_Crds = [] # [ExtractPDBCoords(pdb_obj, seq[pdb_id]) for seq in self.r_seq]
+      T_Crds = [] # [ExtractPDBCoords(pdb_obj, seq[pdb_id]) for seq in self.t_seq]
       
       # If the coordinates collection failed in the previous step, check
       # if correction data for failed residues is available for replacement,
@@ -80,28 +82,28 @@ class ParsePDB(object):
           H_Crds = self.corr[pdb_id][0]
           print('  #1# PDB Info: Accepted coordinates correction: '+pdb_id+' Helix')
         else:
-          missing.write(pdb_name+'|Helix|'+''.join(self.h_seq[pdb_id][0])+'\n')
+          missing.write(pdb_name+'|Helix|'+''.join(self.h_seq[pdb_id])+'\n')
 #          return None
       if N_Crds is None:
         if pdb_id in self.corr and self.corr[pdb_id][1] is not None:
           N_Crds = self.corr[pdb_id][1]
           print('  #1# PDB Info: Accepted coordinates correction: '+pdb_id+' N_dom')
         else:
-          missing.write(pdb_name+'|N_dom|'+''.join(self.n_seq[pdb_id][0])+'\n')
+          missing.write(pdb_name+'|N_dom|'+''.join(self.n_seq[pdb_id])+'\n')
 #          return None
       if C_Crds is None:
         if pdb_id in self.corr and self.corr[pdb_id][2] is not None:
           C_Crds = self.corr[pdb_id][2]
           print('  #1# PDB Info: Accepted coordinates correction: '+pdb_id+' C_dom')
         else:
-          missing.write(pdb_name+'|C_dom|'+''.join(self.c_seq[pdb_id][0])+'\n')
+          missing.write(pdb_name+'|C_dom|'+''.join(self.c_seq[pdb_id])+'\n')
 #          return None
       if F_Crds is None:
         if pdb_id in self.corr and self.corr[pdb_id][3] is not None:
           F_Crds = self.corr[pdb_id][3]
           print('  #1# PDB Info: Accepted coordinates correction: '+pdb_id+' DFG_F')
         else:
-          missing.write(pdb_name+'|DFG_F|'+''.join(self.f_seq[pdb_id][0])+'\n')
+          missing.write(pdb_name+'|DFG_F|'+''.join(self.f_seq[pdb_id])+'\n')
 #          return None
       if G_Crds is None:
         if pdb_id in self.corr and self.corr[pdb_id][4] is not None:
@@ -122,13 +124,15 @@ def ExtractPDBCoords( PDB, Query_Seqs, posit_backup ):
 
   # Quit searching if None is provided
   if Query_Seqs is None:
-    print('\n  #2# PDB Warning: No input data for coordinate extraction: '+PDB.get_id())
+    print('\n  \033[31m#2# PDB Skip:\033[0m No input data for coordinate extraction: \033[31m{}\033[0m'.format(PDB.get_id()))
     return None
 
   for idx, Query_Seq in enumerate(Query_Seqs):
     res_num = len(Query_Seq)
     pdb_id  = PDB.get_id()
     Res_Obj = PDB.get_residues()
+    if re.search(r'.pdb', pdb_id):
+      pdb_id = pdb_id.split('.pdb')[0]
     print('>> Query Sequence:\t{0} -\t{1}'.format(pdb_id, ''.join(Query_Seq)))
 
     ## Convert BioPython Residue Object into List of Residues
@@ -141,12 +145,11 @@ def ExtractPDBCoords( PDB, Query_Seqs, posit_backup ):
       bb_crds, ca_crd, cg_crd, avg_crd, cb_crd, cd_crd = ResidueCoords( res )
 
       Residues.append( [ resname, resid, bb_crds, ca_crd, cg_crd, 
-                                         avg_crd, cb_crd, cd_crd ] )
- 
+                                          avg_crd, cb_crd, cd_crd ] )
+
     # Convert the target sequence into 3-letter AA name. Number of residue
     # depends on the input sequence length (variable)
     Target_Seq = [AA(Query_Seq[i]) for i in range(res_num)]
-
 
     Found = LocateTargetSeq( Target_Seq, Residues, pdb_id )
     if Found is not None:
@@ -154,15 +157,15 @@ def ExtractPDBCoords( PDB, Query_Seqs, posit_backup ):
         return Found
 #        break
       if idx == 1:
-        print('  @ Found residue with 2nd Sequence: '+AA(Found[posit_backup][0]))
+        print('  @ Found residue with 2nd Sequence: \033[31m{}\033[0m'.format(AA(Found[posit_backup][0])))
         return [ Found[posit_backup] ]
     else:
       if idx == 0:
-        print('  ! Warning: Fail to find residue with Primary Sequence')
-        print('  !          Use Secondary recognition sequence')
+        print('  \033[31m!! Warning:\033[0m Fail to find residue with Primary Sequence')
+        print('  \033[31m!!\033[0m          Use Secondary recognition sequence')
         continue
       else:
-        print('\n  #2# PDB ERROR: Fail to find residue with both 1st/2nd Sequences: '+pdb_id)
+        print('\n  \033[31m#2# PDB Skip:\033[0m Fail to find residue with both 1st/2nd Sequences: '+pdb_id)
         return None
 
 
@@ -208,15 +211,15 @@ def LocateTargetSeq( Target_Seq, Residues, pdb_id ):
       Trunc_Seq  = Target_Seq[1:-1]
       Target_Seq = Trunc_Seq
       if len(Target_Seq) <= 3:
-        print('\n  #1# PDB Warning: Cannot find sequence in\t{0}'.format(pdb_id))
+        print('\n  \033[31m#2# PDB Skip:\033[0m Cannot find sequence in\t{0}'.format(pdb_id))
         return None
       else:
-        print('  ## PDB: Cannot find match in {0}. Shortened to {1}'.format(
-               pdb_id, len(Target_Seq) ) )
+        print('  \-33[31m## PDB:\033[0m Cannot find match in {0}. Shortened to {1}'.format(
+                pdb_id, len(Target_Seq) ) )
     else:
-      print(' Matched sequence in\t{0} -\t{1}-{3}-{2}'.format(
-             pdb_id, Found[0][1], Found[-1][1],
-             ''.join([AA(Found[i][0]) for i in range(0,len(Found))])  ) )
+      print(' Matched sequence in\t{0} -\033[31m\t{1}-{3}-{2}\033[0m'.format(
+              pdb_id, Found[0][1], Found[-1][1],
+              ''.join([AA(Found[i][0]) for i in range(0,len(Found))])  ) )
       return Found
 
 
@@ -241,7 +244,7 @@ def CoordCorrect( missing, pdb_dir ):
         if not p_dir:
           continue
         if re.search(r'~', p_dir):
-          sys.exit('\n  #2# PDB FATAL: Python does not recognize "~" home directory\n            Use full directory name: '+p_dir)
+          sys.exit('\n  \033[31m#2# PDB FATAL:\033[0m Python does not recognize "~" home directory\n            Use full directory name: '+p_dir)
         if os.path.isfile(p_dir+'/correct.'+typ+'.'+pdb_name):
           pdb = p_dir+'/correct.'+typ+'.'+pdb_name
       if pdb is None:
@@ -256,14 +259,14 @@ def CoordCorrect( missing, pdb_dir ):
         resid   = res.get_id()[1]
         bb_crds, ca_crd, cg_crd, avg_crd, cb_crd, cd_crd = ResidueCoords( res )
         Residue.append( [ resname, resid, bb_crds, ca_crd, cg_crd, 
-                                         avg_crd, cb_crd ] )
+                                          avg_crd, cb_crd ] )
 
       # Put correction data into separated arrays,
       # [Helix, N-Dom, C-Dom, DFG_F, Gate, Rs1, Rs2, Rs3, Rs4, 
       #  Cs1, Cs2, Cs3, Cs4, Cs5, Cs6, Cs7, ]
       if pdb_id not in dic:
-        dic[pdb_id] = [None, None, None, None, None, None, None, None,
-                       None, None, None, None, None, None, None, ]
+        dic[pdb_id] = [ None, None, None, None, None, None, None, None,
+                        None, None, None, None, None, None, None, ]
 
       if   typ == 'Helix': dic[pdb_id][0]  = Residue
       elif typ == 'N_dom': dic[pdb_id][1]  = Residue
@@ -327,7 +330,6 @@ def ResidueCoords( res ):
         cg_coord = res['CG2'].get_coord()
 
   avg_coord = np.mean(sc_coords, axis=0)
-
 
   return bb_coords, ca_coord, cg_coord, avg_coord, cb_coord, cd_coord 
 
