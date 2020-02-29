@@ -12,7 +12,7 @@
 ##	v3.0 - 17.01.09     Rewrite the process into OOP format to allow
 ##			    check on 'super'. If failed, use 'align' instead
 ##  v4.0 - 18.03.12     renamed and rebuilt as a function
-##
+##  v4.1   20.02.07   search "Executive: RMS" to cover both PyMOL 1.x and 2.x
 ##
 ##	Purpose: Read in the template structure and the model structure(s)
 ##		 and use PyMOL's Superimposition function to align the 
@@ -71,12 +71,12 @@ def SuperposePDB( pymol_exec, templ_pdb, Targets, extIn, extOt, resid, outpref )
   Mdls, Atoms = [], []
   # Extract information from pymol-log file
   pymol_pref = '{0}.{1}.{2}'.format(outpref, templ, 'super')
-  with open('{0}.pymol-log'.format(pymol_pref,'super'), 'r') as fi:
+  with open('{0}.pymol-log'.format(pymol_pref), 'r') as fi:
     for line in fi:
       if re.search(r'PyMOL>load', line):
         curr_pdb = line.split('load ')[1].split(', ')
         Mdls.append(curr_pdb)
-      if re.search(r'Executive: RMS =', line):
+      if re.search(r'Executive: RMS', line):
         atom = int(line.split('=')[1].split('(')[1].split('to')[0])
         Atoms.append([line.split(':')[1], atom])
       if re.search(r'Executive: Error', line):
@@ -88,7 +88,6 @@ def SuperposePDB( pymol_exec, templ_pdb, Targets, extIn, extOt, resid, outpref )
 
   # Write out extracted information and identify bad alignment
   Aligns = []
-  pymol_pref = '{0}.{1}.{2}'.format(outpref, templ, 'super')
   with open('{0}.mod-super.log'.format(pymol_pref), 'w') as fo:
     # write to alignment, save models that fail to have 'enough atoms'
     for idx, Names in enumerate(Mdls):

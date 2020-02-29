@@ -16,7 +16,7 @@ p = PDBParser(PERMISSIVE=1, QUIET=True)
 class GenerateProfileAlignment( object ):
 
   def __init__( self, hom_dir=None, tmp_dir=None, rst_dir=None,
-                      ref_pdb=None, f_nogap=None,   f_dict=None    ):
+                      ref_pdb=None, f_nogap=None, f_dict=None    ):
     self.tmp_dir = tmp_dir
     self.hom_dir = hom_dir
     self.rst_dir = rst_dir

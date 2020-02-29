@@ -4,43 +4,62 @@ import re
 import os
 import time
 import requests
+
+import numpy as np
 import pandas as pd
 
-from aa_residue import *
+from aa_residue import AA
+from aa_residue import UnnaturalAA
+from aa_residue import SaltAdditive
 
 from tqdm import tqdm
-from pathos import multiprocessing
-
 
 ##########################################################################   
-def ProcessPDBList(pdb_list, output_pref):
-  PDB_List = pd.read_csv(pdb_list, sep='\s+', header=None, comment='#').iloc[:,0].values.tolist()
+## Read in pdb list with different formats:
+# Format of the list:
+#  1) <pdb_id>_<chain_id>.xxx.pdb
+#  2) <pdb_id>_<chain_id>.xxx.pdb <chain_id>
+#  3) <pdb_id>.xxx.pdb            <chain_id>
+#  4) <pdb_id>                    <chain_id>
+#  (PDB ID and chain ID separated by '_')
+#
+#  e.g.:   1ATP_E.xxx.pdb
+#          3HHP.xxx.pdb    C
+#          6GTT            A
+def ProcessPDBList( pdb_list ):
+  PDB_List = pd.read_csv(pdb_list, sep='\s+', header=None, comment='#').to_numpy()
 
   PDB   = []
   for entry in PDB_List:
-    if re.search(r'.pdb', entry):
-      pdb_id   = entry.split('.')[0].split('_')[0]
-      chain_id = entry.split('.')[0].split('_')[1]
+    if len(entry) == 2:
+      if re.search(r'.pdb', entry[0]):
+        pdb_id   = entry[0].split('.')[0].split('_')[0]
+        chain_id = entry[0].split('.')[0].split('_')[1]
+      else:
+        pdb_id   = entry[0]
+      if type(entry[1]) == str:
+        chain_id = entry[1]
+      PDB.append([pdb_id, chain_id])
+    elif len(entry) == 1:
+      if re.search(r'.pdb', entry):
+        pdb_id   = entry.split('.')[0].split('_')[0]
+        chain_id = entry.split('.')[0].split('_')[1]
+      else:
+        pdb_id   = entry.split('_')[0]
+        chain_id = entry.split('_')[1]
+      PDB.append([pdb_id, chain_id])
     else:
-      pdb_id   = entry.split('_')[0]
-      chain_id = entry.split('_')[1]
-    PDB.append([pdb_id, chain_id])
-  
-  # Cannot use MPI, RCSB blocks simu multi connection
-  # Extract the UniProt ID of the PDB via internet
-  Rst = [SearchPDB(pdb) for pdb in tqdm(PDB)]
+      sys.exit('\033[31m ERROR: PDB list format is invalid\033[0m')
 
-  print('\n  -- Done searchPDB: \033[31m{0}\033[0m --> \033[31m{1}\033[0m --\n'.format(len(PDB), len(Rst)))
-  return Rst
+  return PDB
 
 
 ##########################################################################
 ## Download the PDB page from the Web and search for the UniProt ID
 def SearchPDB( pdb ):
   pdb_id, chain_id = pdb
-  print(pdb_id, chain_id)
+#  print(pdb_id, chain_id)
 
-#########################################
   pdb_length, uni_id, tax_id, species = None, None, None, None
   ec, pmid, p_name, uni_id = None, None, None, None
   resolu, deposit, release, latest = None, None, None, None
@@ -104,7 +123,7 @@ def SearchPDB( pdb ):
 
   HD = {}
   mol_id, xtalc_remark = 0, 0
-  space, mutation, aa_modif, ligand = None, None, None, None
+  space, mutation, aa_modif, ligand, salt = None, None, None, None, None
   XtalC, Het_Lns, HetNam_Lns, ModRes, HetNam = [], [], [], [], []
   SeqAdv, DBRef = [], []
 
@@ -165,25 +184,30 @@ def SearchPDB( pdb ):
         het_nm += l.split(het_id)[1].strip()
 
     # format for ligand: <3-letter code>:<full name>
-    lig = '{0}:{1}'.format(het_id, het_nm)
+    lig_name = '{0}:{1}'.format(het_id, het_nm)
     # modified amino acid, save
     if len(ModRes) > 0:
       for mod_res in ModRes:
         if het_id == mod_res:
           if aa_modif is None:
-            aa_modif = ''.join(lig)
+            aa_modif = ''.join(lig_name)
           else:
-            aa_modif += '|'+lig
+            aa_modif += '|'+lig_name
 
-    # if it is metal ions, detergents, lipids, etc, ignore
-    if SaltAdditive(het_id) or UnnaturalAA(het_id):
-      continue
-    # if ligands, save; multiple ligands, use '|' as separator
+    ## if it is salt ions and additives, etc
+    if SaltAdditive(het_id):
+      if salt is None:
+        salt = ''.join(lig_name)
+      else:
+        salt += '|'+lig_name
+    ## if it is unnatural Amino Acids, ignore -- registered by aa_modif
+    elif UnnaturalAA(het_id):
+      continue    # if ligands, save; multiple ligands, use '|' as separator
     else:
       if ligand is None:
-        ligand = ''.join(lig)
+        ligand = ''.join(lig_name)
       else:
-        ligand += '|'+lig
+        ligand += '|'+lig_name
 
 ###############
   ## Identify individual protein chain from PDB HEADER, parse them individually
@@ -197,7 +221,7 @@ def SearchPDB( pdb ):
         HD[mol_id] = HeadData(pmid=pmid, deposit=deposit, release=release,
                               latest=latest, resolu=resolu, space=space,
                               crystal=crystal, mutation=mutation,
-                              ligand=ligand, aa_modif=aa_modif, 
+                              ligand=ligand, salt=salt, aa_modif=aa_modif, 
                               seqadv=SeqAdv, dbref=DBRef)
       if re.search(r'MOLECULE:', l):
         HD[mol_id].p_name = l.rstrip().split(':')[1].split(';')[0].strip()
@@ -242,6 +266,7 @@ def SearchPDB( pdb ):
         Entity[chain_id].resolu   = HD[mol_id].resolu
         Entity[chain_id].space    = HD[mol_id].space
         Entity[chain_id].ligand   = HD[mol_id].ligand
+        Entity[chain_id].salt     = HD[mol_id].salt
         Entity[chain_id].aa_modif = HD[mol_id].aa_modif
         Entity[chain_id].crystal  = HD[mol_id].crystal
         Entity[chain_id].uni_length = SearchUniProt( Entity[chain_id].uni_id,
@@ -251,6 +276,7 @@ def SearchPDB( pdb ):
 
 
 ##########################################################################
+## Object to store Data. To make it a iterable dict in python3, output has iter()
 class HeadData(object):
   def __init__(self, pdb_id=None, chain_id=None, uni_id=None,
                     pdb_length=None, uni_length=None,
@@ -258,8 +284,8 @@ class HeadData(object):
                     species=None, common=None, taxid=None,
                     pmid=None, deposit=None, release=None, latest=None, 
                     resolu=None, mutate=None, mutation=None, space=None, 
-                    ligand=None, aa_modif=None, crystal=None, seqadv=None,
-                    dbref=None ):
+                    ligand=None, salt=None, aa_modif=None,
+                    crystal=None, seqadv=None, dbref=None ):
       self.pdb_id = pdb_id      # pdb ID for PDB (orig input)
       self.chain_id = chain_id    # pdb chain ID for PDB (orig input)
       self.uni_id = uni_id              # uniprot ID found in Entity query
@@ -281,13 +307,14 @@ class HeadData(object):
       self.latest  = latest     # latest date, indicated update to deposit
       self.space = space        # xtal lattice space group
       self.ligand = ligand      # HETNAM in PDB header, organic chemicals
+      self.salt = salt          # HETNAM in PDB header, salt ions 
       self.aa_modif = aa_modif  # MODRES in PDB header, unnatural amino acid
       self.crystal = crystal    # CRYSTL in PDB header, xtal lattice group info
       self.seqadv = seqadv      # SEQADV in PDB header, mutation info
       self.dbref = dbref        # DBREF in PDB header
 
   def __iter__(self):
-    return self.__dict__.iteritems()
+    return iter( self.__dict__.items() )
 
 
 ##########################################################################

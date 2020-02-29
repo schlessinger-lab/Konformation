@@ -6,17 +6,17 @@ import pandas as pd
 def DefaultVariables():
   script   = '/home/pmung/Dropbox/9_scripts/3_program/structures/4_Konformation/'
   data_dir = script+'z_database/'
-  outpref  = 'check_kinase.200220'
+  outpref  = 'check_kinase.NEWEST'
 
   Settings = {
     'WORKDIR':   [os.getcwd(), '# Current working directory'],
     'OUTPREF':   [outpref, '# Output prefix for result and intermediate info files'],
 
-    'RDKNOWNKIN':[data_dir+'all_downloaded_kinase_pdb.170818.list','# Read from list of downloaded kinase structures (with extension .1atp.pdb)'],
-    'RDNONKIN':  ['check_kinase.200215.non_kinase.list','# Read from a List of PDBs that has no kinase catalytic domain'],
-    'RDCHECKED': ['None', '# Read from a List of any PDB that have been checked previously to skip redundant checks'],
+    'RDKNOWNKIN':[data_dir+'all_downloaded_kinase_pdb.200220.list','# Read from list of downloaded kinase structures (with extension .1atp.pdb)'],
+    'RDNONKIN':  ['check_kinase.200220.non_kinase.list','# Read from a List of PDBs that has no kinase catalytic domain'],
+    'RDCHECKED': ['check_kinase.200220.checked_pdb.list', '# Read from a List of any PDB that have been checked previously to skip redundant checks'],
 
-    'WTNEWKNOWN':['all_downloaded_kinase_pdb.200220.list','# Write to List of newly found kinase structures, including KNOWNLIST'],
+    'WTNEWKNOWN':['all_downloaded_kinase_pdb.NEWEST.list','# Write to List of newly found kinase structures, including KNOWNLIST'],
     'WTNONKIN':  [outpref+'.non_kinase.list','# Write to a List of PDBs that has no kinase catalytic domain'],
     'WTCHECKED': [outpref+'.checked_pdb.list', '# Write to a List of PDB that have been checked for kinase domain'],
 

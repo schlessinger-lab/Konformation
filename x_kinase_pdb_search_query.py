@@ -144,6 +144,9 @@ class DownloadNewPDB(object):
     except KeyError:
       print('  \033[31m> ERROR: BioPython cannot read in PDB: \033[0m'+biopdb_modf)
       return None
+    except ValueError:
+      print('  \033[31m> ERROR: PDB file is empty: \033[0m'+biopdb_modf)
+      return None
 
     ### Bug alert: as of 20.02.18, Biopython dev hasn't come up with good
     ### strategy to fix the 'atom.disordered_get_list()' issue with alternative

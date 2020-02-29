@@ -1,0 +1,43 @@
+# Path to main scripts
+SCRIPT	/home/pmung/Dropbox/9_scripts/3_program/structures/4_Konformation/
+
+# Path to main scripts database
+DATADIR	/home/pmung/Dropbox/9_scripts/3_program/structures/4_Konformation/z_database/
+
+# Path to directory with PDB structures
+PDBDIR	/home/pmung/Dropbox/9_scripts/3_program/structures/4_Konformation/examples/2_run_kinfo_classifier/
+
+# Path to home directory for working
+HOMEDIR	/home/pmung/Dropbox/9_scripts/3_program/structures/4_Konformation/examples/2_run_kinfo_classifier/
+
+
+# Output prefix for data generated
+OUTPREF	kinfo_pdb.example
+
+# List of PDB to be examined; same as "WTNEWKNOWN" for 1_find_new_kinase_pdb.py
+PDBLIST	kinfo_pdb.list
+
+# Aligned FASTA of PDB corresponding to PDBLIST
+PDBALIGN	kinfo_pdb.fasta
+
+
+# Use R::randomForest instead of SKLearn RFClassifier (def: False)
+USERRF	False
+
+# Use SKLearn ML model: rf|svm|nn|kn|dt|gp|gb (def: rf)
+USESKL	gb
+
+
+# Initiate checking of input PDB provided in PDBLIST?
+CHECKPDB	False
+
+# Initiate checking of input PDB sequence to remove non-kinases?
+CHKALIGN	True
+
+# Has input PDB been pre-superposed to 1ATP ref residue?
+SUPERPOSED	True
+
+
+# User-input list of missing residue PDB, same directory to PDB
+MISSRES	None
+

@@ -2,16 +2,18 @@
 
 
 import numpy as np
-from pathos import multiprocessing
 from tqdm import tqdm
+from pathos import multiprocessing
+
 from aa_residue    import *
 from x_helix_axis  import *
+
 from Bio.PDB.Polypeptide import PPBuilder
 np.seterr(invalid='ignore')
 
 ##########################################################################
 ##
-def DFGTorsionAngle( Ref_Coords, Tgt_Coords, Data, output ):
+def DFGTorsionAngle( Ref_Coords, Tgt_Coords, Data, parm, output ):
 
   # Input_Coords = [pdb_name, H_Crds, N_Crds, C_Crds, G_Crds, R_Crds, T_Crds]
   #     x_Coords = [resname, resid, bb_crds, ca_crd, cg_crd, avg_crd, cb_crd] 
@@ -20,13 +22,18 @@ def DFGTorsionAngle( Ref_Coords, Tgt_Coords, Data, output ):
   print('##################################################################\n')
 
   # Create DFG object for MPI
-  mpi = multiprocessing.Pool(processes = multiprocessing.cpu_count())
   Ref = DFGTorsions(Ref_Coords)
-  print(Ref)
-#  Tmp = [DFGTorsions(Tgt) for Tgt in Tgt_Coords]
-  Tmp = [x for x in tqdm(mpi.imap_unordered(DFGTorsions, Tgt_Coords),total=len(Tgt_Coords))]
-  mpi.close()
-  mpi.join()
+  if parm['MPICPU'][0] == 1:
+    Tmp = [DFGTorsions(Tgt) for Tgt in tqdm(Tgt_Coords)]
+  else:
+    if parm['MPICPU'][0] == 0:
+      mpi_cpu = multiprocessing.cpu_count()
+    else:
+      mpi_cpu = parm['MPICPU'][0]
+    mpi   = multiprocessing.Pool(mpi_cpu)
+    Tmp = [x for x in tqdm(mpi.imap(DFGTorsions, Tgt_Coords),total=len(Tgt_Coords))]
+    mpi.close()
+    mpi.join()
 
   Tgt_List = [x for x in Tmp if x is not None]
   print('\n ## DFG-motif Vector return: {0}\n'.format(len(Tgt_List)))
@@ -44,7 +51,7 @@ def ExportDFGMeasure( Ref, Tgt_List, Data, output ):
 
   Ref_Ref = [ pdb_id_x, resi_id_x, np.vdot(p1x,p1x), np.vdot(p2x,p2x),
               p_state, np.vdot(v1x,v1x), np.vdot(v2x,v2x), v_state,
-              r3x, d0_presx, d1_presx ]
+              np.vdot(r3x,r3x), d0_presx, d1_presx ]
 
   Tgt_Tmp = []
   for Tgt in Tgt_List:
@@ -67,9 +74,9 @@ def ExportDFGMeasure( Ref, Tgt_List, Data, output ):
       r3r3x = None
     else:
       r3r3x = np.vdot(r3, r3x)
-  
-    Tgt_Tmp.append([ pdb_id, resi_id, p1p1x, p2p2x, p_state,
-                     v1v1x, v2v2x, v_state, r3r3x, d0_pres, d1_pres ])
+
+    Tgt_Tmp.append( [ pdb_id, resi_id, p1p1x, p2p2x, p_state,
+                      v1v1x, v2v2x, v_state, r3r3x, d0_pres, d1_pres ] )
   Tgt_Inp = sorted(Tgt_Tmp, key=lambda x: (x[4], x[0]))	# sort on crossed vec
 
   # Add Ref to the target list for printing
@@ -149,7 +156,7 @@ def DFGTorsions( Input ):
                             D_CG_Coords[center],   D_CA_Coords[center],
                             F_CA_Coords[f_center], F_CG_Coords[f_center],
                             pdb_name )
-  
+
   return [ pdb_name, res_id, p1, p2, v1, v2, r3, d0_x, d1_x ]
 
 
@@ -158,7 +165,7 @@ def DFGTorsions( Input ):
 ## Cross-Products of the pairs
 ## Asp-CG (r1), Asp-CA (r2), Phe-CA (r3), Phe-CG (r4)
 def CalculateVector(r1, r2, r3, r4, pdb_name):
-  
+
   try:
     r21 = np.array(r1-r2, dtype=np.float64)   # (AspCG-AspCA)
   except TypeError:

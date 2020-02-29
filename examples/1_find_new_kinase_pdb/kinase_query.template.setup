@@ -1,0 +1,47 @@
+# Current working directory
+WORKDIR		./test/
+
+# Output prefix
+OUTPREF		check_kinase
+
+# Read from list of downloaded kinase structures (*.1atp.pdb)
+RDKNOWNKIN	../../z_database/all_downloaded_kinase_pdb.170818.list
+
+# Read from a List of PDBs that has NO kinase catalytic domain
+RDNONKIN	check_kinase.200227.non_kinase.list
+
+# Read from a List of PDB that have been CHECKED previously
+RDCHECKED	check_kinase.200227.checked_pdb.list
+
+
+# Write to a List of newly found kinase structures, including KNOWNLIST
+WTNEWKNOWN	all_downloaded_kinase_pdb.list
+
+# Write to a List of PDBs that has no kinase catalytic domain
+WTNONKIN	check_kinase.non_kinase.list
+
+# Write to a List of PDB that have been checked for kinase domain
+WTCHECKED	check_kinase.checked_pdb.list
+
+
+# Sequence length Cutoff for kinase catalytic domain (def: 220)
+LENCUTOFF	225
+
+# Sequence identity cutoff for kinase catalytic domain recognition (def: 40.0%)
+IDTCUTOFF	40
+
+# FASTA file of canonical human kinome
+KINOMEDB	../../z_database/MD_human_kinome_alignment.2019.nogap.fasta
+KINOMEGPDB	../../z_database/MD_human_kinome_alignment.2019-2.fasta
+
+# Reference PDB, bovine PKA (1ATP_E)
+REFPDB		../../z_database/1ATP_E.pdb
+
+# Reference 1ATP_E residues for PyMOL superposition
+REFRES	"resi 122-138+162-183"
+
+# Output extension for 1atp-superposed structure
+OUTEXT		1atp.pdb
+
+# Full path to PyMOL Executable
+PYMOL		/usr/bin/pymol

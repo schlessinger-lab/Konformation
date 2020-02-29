@@ -21,10 +21,9 @@
 ##########################################################################
 
 import sys,os
-from pathos import multiprocessing
 from tqdm import tqdm
+from pathos import multiprocessing
 
-#from aa_residue     import *
 from x_pdb_extract  import ParsePDB
 from x_data_coll    import Data2Pandas
 from x_data_coll    import BuildDataSet
@@ -36,53 +35,57 @@ from x_dfg_torsion  import DFGTorsionAngle
 from x_domain_dist  import DomainDistances
 from x_search_align import CacheSeqDatabase
 from x_helix_axis   import HelixMeasurements
+#from x_x_r_c_spines import RCSpinesMeasure
 
 from Bio import SeqIO
 from Bio.PDB.PDBParser import PDBParser
 p = PDBParser(PERMISSIVE=1, QUIET=True)
 
 ##########################################################################
-def Konformation( RefRes, Query_PDB, output, **kwargs ):
+def Konformation( parm, Query_PDB, output, **kwargs ):
 
   # Read in aligned fasta library for the PDB
-  Fasta_Lib = CacheSeqDatabase(RefRes['FASTA'])
-  print(' ** Found number of aligned FASTA entries: \033[31m{}\033[0m'.format(len(Fasta_Lib)))
+  Fasta_Lib = CacheSeqDatabase(parm['FASTA'][0])
+  print(' ** Found number of aligned FASTA entries: \033[31m{0}\033[0m'.format(len(Fasta_Lib)))
 
   # Create master parameter database for all query PDBs, including Ref PDB
   PDB_Data = {}
-  PDB_Data[RefRes['REFPDB'].split('/')[-1].split('.')[0]] = BuildDataSet()
+  PDB_Data[parm['REFPDB'][0].split('/')[-1].split('.')[0]] = BuildDataSet()
   for pdb in Query_PDB:
     pdb_id = pdb.split('/')[-1].split('.')[0]
     PDB_Data[pdb_id] = BuildDataSet()
     PDB_Data[pdb_id]['pdb']    = pdb
     PDB_Data[pdb_id]['pdb_id'] = pdb_id
 
-
-  ParameterCalculations( RefRes, Query_PDB, Fasta_Lib, PDB_Data, output )
+  ## Calculated data is stored back into the same PDB_Data
+  ParameterCalculations( parm, Query_PDB, Fasta_Lib, PDB_Data, output )
 
   # Print out all data in dataframe
-  Data2Pandas(PDB_Data, output)
+  parm_df = Data2Pandas(PDB_Data, output)
+  
+  return parm_df
 
 
 ##########################################################################
-def ParameterCalculations( RefRes, Query_PDB, Fasta_Lib, PDB_Data, output ):
+## Calculated data is stored back into the same PDB_Data
+def ParameterCalculations( parm, Query_PDB, Fasta_Lib, PDB_Data, output ):
 
-  ref_pdb   = RefRes['REFPDB']
-  pdb_dir   = RefRes['PDBDIR']
-  missing   = RefRes['MISSRES']
+  ref_pdb   = parm['REFPDB'][0]
+  pdb_dir   = parm['PDBDIR'][0]
+  missing   = parm['MISSRES'][0]
   ## primary seq sets for key recognition sites
-  helix_res = RefRes['HELIX']
-  n_dom_res = RefRes['NDOM']
-  c_dom_res = RefRes['CDOM']
-  dfg_f_res = RefRes['DFGF']
-  gate_res  = RefRes['GATE']
+  helix_res = parm['HELIX']
+  n_dom_res = parm['NDOM']
+  c_dom_res = parm['CDOM']
+  dfg_f_res = parm['DFGF']
+  gate_res  = parm['GATE']
 
   ## if failed with primary set, try alternative seq that takes last residues
   ## alternative seq sets for key recognition sites, the last resid
-  xheli_res = RefRes['XHELIX']
-  zndom_res = RefRes['ZNDOM']
-  zcdom_res = RefRes['ZCDOM']
-  zdfgf_res = RefRes['ZDFGF']
+  xheli_res = parm['XHELIX']
+  zndom_res = parm['ZNDOM']
+  zcdom_res = parm['ZCDOM']
+  zdfgf_res = parm['ZDFGF']
 
   # Read in Reference PDB, extract the helix residues and domain resid columns,
   ref_pdb_id = ref_pdb.split('/')[-1].split('.')[0]
@@ -105,7 +108,7 @@ def ParameterCalculations( RefRes, Query_PDB, Fasta_Lib, PDB_Data, output ):
     Ref_N_Dom[name] = [ ref_n_dom[name], zref_ndom[name] ]
     Ref_C_Dom[name] = [ ref_c_dom[name], zref_cdom[name] ]
     Ref_DFG_F[name] = [ ref_dfg_f[name], zref_dfgf[name] ]
-    Ref_Gate[name]  = [ ref_gate[name], [] ]
+    Ref_Gate[name]  = [ ref_gate[name],  [] ]
 
 
   # Extract residues using the column info
@@ -134,20 +137,27 @@ def ParameterCalculations( RefRes, Query_PDB, Fasta_Lib, PDB_Data, output ):
 
 
   # Calculate the reference helix axis and C-helix parameters
-  pRef = ParsePDB( h_seq=Ref_Helix, n_seq=Ref_N_Dom, c_seq=Ref_C_Dom,
-                   g_seq=Ref_Gate,  f_seq=Ref_DFG_F, t_seq=Ref_Cs, 
-                   pdb_dir=pdb_dir )
+  pRef = ParsePDB(  h_seq=Ref_Helix, n_seq=Ref_N_Dom, c_seq=Ref_C_Dom,
+                    g_seq=Ref_Gate,  f_seq=Ref_DFG_F, t_seq=Ref_Cs, 
+                    pdb_dir=pdb_dir, corr='' )
   Ref_Coords = pRef.extract_pdb(ref_pdb)
   
   # Calculate the query PDBs helix axis and C-helix parameters
-  mpi  = multiprocessing.Pool()
-  pPDB = ParsePDB( h_seq=Helix_Seq, n_seq=N_Dom_Seq, c_seq=C_Dom_Seq,
-                   g_seq=Gate_Seq,  f_seq=DFG_F_Seq, t_seq=Cs_Seq,
-                   pdb_dir=pdb_dir, corr=CoordCorrect(missing, pdb_dir) )
-  Tmp  = [pPDB(pdb) for pdb in tqdm(Query_PDB)]
-#  Tmp  = [x for x in tqdm(mpi.imap(pPDB,Query_PDB),total=len(Query_PDB))]
-  mpi.close()
-  mpi.join()
+  pPDB = ParsePDB(  h_seq=Helix_Seq, n_seq=N_Dom_Seq, c_seq=C_Dom_Seq,
+                    g_seq=Gate_Seq,  f_seq=DFG_F_Seq, t_seq=Cs_Seq,
+                    pdb_dir=pdb_dir, corr=CoordCorrect(missing, pdb_dir) )
+
+  if parm['MPICPU'][0] == 1:
+    Tmp  = [pPDB(pdb) for pdb in tqdm(Query_PDB)]
+  else:
+    if parm['MPICPU'][0] == 0:
+      mpi_cpu = multiprocessing.cpu_count()
+    else:
+      mpi_cpu = parm['MPICPU'][0]
+    mpi  = multiprocessing.Pool(mpi_cpu)
+    Tmp  = [x for x in tqdm(mpi.imap(pPDB,Query_PDB),total=len(Query_PDB))]
+    mpi.close()
+    mpi.join()
 
   # PDB_Coords = [pdb_name, H_Crds, N_Crds, C_Crds, G_Crds, F_Crds, T_Crds]
   PDB_Coords = [Itm for Itm in Tmp if Itm is not None]
@@ -156,13 +166,15 @@ def ParameterCalculations( RefRes, Query_PDB, Fasta_Lib, PDB_Data, output ):
         len(Tmp), len(PDB_Coords)))
   os.system('cat _TEMP.missing.* > '+output+'.missing.txt; rm _TEMP.missing.*')
 
+
   # Compare reference and query PDB C-helix/N-dom/C-dom parameters
-  RefReg2, Reg2 = HelixMeasurements(Ref_Coords, PDB_Coords, PDB_Data, output)
+  RefReg2, Reg2 = HelixMeasurements( Ref_Coords, PDB_Coords, PDB_Data, parm, output )
 
-  DomainDistances( Ref_Coords, PDB_Coords, RefReg2, Reg2, PDB_Data, output)
-  DFGTorsionAngle( Ref_Coords, PDB_Coords, PDB_Data, output)
+  ## Measeure various parameters; RC-Spines are irrelevant and are not calculated anymore
+  DomainDistances( Ref_Coords, PDB_Coords, RefReg2, Reg2, PDB_Data, parm, output )
+  DFGTorsionAngle( Ref_Coords, PDB_Coords, PDB_Data, parm, output )
   DescriptLigands( Ref_Coords, PDB_Coords, PDB_Data )
-
+#  RCSpinesMeasure( Ref_Coords, PDB_Coords, PDB_Data, parm, output )
 
 ##########################################################################
 ##

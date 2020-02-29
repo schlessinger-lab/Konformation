@@ -2,11 +2,17 @@
 
 import re,sys
 import numpy as np
-from x_helix_axis import *
-from aa_residue import *
+
 from Bio import SeqIO
 
+from x_helix_axis import Distance
 
+from aa_residue import Nucleotides
+from aa_residue import SaltAdditive
+from aa_residue import CheckUnnaturalAA
+
+
+## These coodinates are in reference to 1ATP_E PDB structure only
 # pocket   = [ [coordinates], sphere radius ]
 pock_out   = [ [ 4.52,  7.98, 12.12], 3.3]  # 1
 pock_hinge = [ [ 3.70,  9.76,  2.52], 2.7]  # 2
@@ -42,7 +48,7 @@ def LigPocketOccupy( pdb_obj ):
         HA = [a for a in res if not re.search(r'H', a.get_name())]
         res_ha  = len(HA)	# number of heavy atom
         LP_Dists.append( [ pdb_id, res_name, res_id, res_ha, 
-                           LigPockDistances(res) ] )
+                            LigPockDistances(res) ] )
 
   if len(LP_Dists) == 0:
     LP_Dists.append(No_Pock)
@@ -150,15 +156,21 @@ def DescriptLigands(Ref, Tgt_List, Data):
       continue
 
     # Prefer non-nucleotide ligands if 2 or more ligands are found.
-    # only report the largest ligand if multiple ligands in 1 PDB
+    # Only report the largest ligand if multiple ligands in one PDB
     # cannot distinguish if ligands are in binding site or not
     if len(Tgt[7]) > 1:
       Lig = [ lig for lig in Tgt[7] if not Nucleotides(lig[1]) ]
+
+      ## In cases where there are multiple non-nucleotide molecules
       if len(Lig) > 1:
         Lig.sort(key=lambda x: x[3], reverse=True)
         Data[pdb_id]['lig_multi'] = list(zip(*Lig))[1]
-      Tt = Lig[0]
-    else:
+
+      ## In cases where every molecule is nucleotide, take first one
+      if len(Lig) == 0:
+        Data[pdb_id]['lig_multi'] = list(zip(*[lig for lig in Tgt[7]]))[1]
+
+    else:  # if there is only only 1 molecule, or none
       Tt = Tgt[7][0]
 
     Data[pdb_id]['lig_name']   = Tt[1]

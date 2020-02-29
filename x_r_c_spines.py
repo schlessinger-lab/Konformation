@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 
-import re,os,glob,sys
+import os,sys
+import re,glob
 import numpy as np
-from pathos import multiprocessing
+
 from tqdm import tqdm
+from numpy.linalg import norm
+from pathos import multiprocessing
 
 from x_helix_axis  import *
-from numpy.linalg import norm
 
 ##########################################################################
 
@@ -217,7 +219,7 @@ def CalcCurvature1( Array_3D ):
 
 ##########################################################################
 #
-def RCSpinesMeasure( Ref_Coords, Tgt_Coords, Data, output ):
+def RCSpinesMeasure( Ref_Coords, Tgt_Coords, Data, parm, output ):
 
   # Input_Coords = [pdb_name, H_Crds, N_Crds, C_Crds, G_Crds, R_Crds, T_Crds]
   #     x_Coords = [resname, resid, bb_crds, ca_crd, cg_crd, avg_crd]  
@@ -227,11 +229,17 @@ def RCSpinesMeasure( Ref_Coords, Tgt_Coords, Data, output ):
   Ref = pRC(Ref_Coords)
 
   # Create R/C-spine object for MPI
-  mpi = multiprocessing.Pool(processes = multiprocessing.cpu_count())
-#  Tmp = [pRC(Tgt) for Tgt in Tgt_Coords]
-  Tmp = [x for x in tqdm(mpi.imap_unordered(pRC, Tgt_Coords),total=len(Tgt_Coords))]
-  mpi.close()
-  mpi.join()
+  if parm['MPICPU'][0] == 1:
+    Tmp = [pRC(Tgt) for Tgt in Tgt_Coords]
+  else:
+    if parm['MPICPU'][0] == 0:
+      mpi_cpu = multiprocessing.cpu_count()
+    else:
+      mpi_cpu = parm['MPICPU'][0]
+    mpi   = multiprocessing.Pool(mpi_cpu)
+    Tmp = [x for x in tqdm(mpi.imap_unordered(pRC, Tgt_Coords),total=len(Tgt_Coords))]
+    mpi.close()
+    mpi.join()
 
   # Tgt = [ pdb_name, r_curv, c_curv ]
   Tgt_List = [x for x in Tmp if x is not None]

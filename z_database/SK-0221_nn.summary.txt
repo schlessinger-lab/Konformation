@@ -1,0 +1,51 @@
+
+[84]
+
+
+
+ml_models = SK_TrainML( train_df, lib_dir, ml_alg, save_model=True )...
+### Evaluate SKlearn ML Model Performance ###
+ # Confusion Matrix:
+[[37  0  0]
+ [ 0 16  0]
+ [ 0  0 12]]
+
+# Mean Squared Error:
+              precision    recall  f1-score   support
+
+           0       1.00      1.00      1.00        37
+           1       1.00      1.00      1.00        16
+           2       1.00      1.00      1.00        12
+
+    accuracy                           1.00        65
+   macro avg       1.00      1.00      1.00        65
+weighted avg       1.00      1.00      1.00        65
+
+
+# Accuracy Score - Out-of-bag Error:
+100.000 %  -  0.000 %
+
+### Evaluate SKlearn ML Model Performance ###
+ # Confusion Matrix:
+[[23  0  1  0  0]
+ [ 0 10  0  0  0]
+ [ 0  0 13  0  0]
+ [ 0  0  0  6  0]
+ [ 0  0  0  0 12]]
+
+# Mean Squared Error:
+              precision    recall  f1-score   support
+
+           0       1.00      0.96      0.98        24
+           1       1.00      1.00      1.00        10
+           2       0.93      1.00      0.96        13
+           3       1.00      1.00      1.00         6
+           4       1.00      1.00      1.00        12
+
+    accuracy                           0.98        65
+   macro avg       0.99      0.99      0.99        65
+weighted avg       0.99      0.98      0.98        65
+
+
+# Accuracy Score - Out-of-bag Error:
+98.462 %  -  1.538 %

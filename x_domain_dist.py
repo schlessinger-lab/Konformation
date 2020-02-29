@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 
-from pathos import multiprocessing
 from tqdm import tqdm
-from x_dfg_torsion import *
-from x_helix_axis  import *
-from x_fasta_parse import *
-from x_pdb_extract import *
+from pathos import multiprocessing
+
+#from x_dfg_torsion import *
+from x_helix_axis  import Distance,SphericalAngles,ArrayCent,VectorAngle
+#from x_fasta_parse import *
+#from x_pdb_extract import *
 
 ##########################################################################
 ## Use MPI to run calculation of spherical angle and distance calculations 
 ## for H-helix, N-domain, and C-domain. Results are exported into files
-def DomainDistances( Ref_Coords, PDB_Coords, RefReg2, Reg2, Data, output ):
+def DomainDistances( Ref_Coords, PDB_Coords, RefReg2, Reg2, Data, parm, output ):
 
   # Input_Coords = [pdb_name, H_Crds, N_Crds, C_Crds, G_Crds, R_Crds, T_Crds]
   #     x_Coords = [resname, resid, bb_crds, ca_crd, cg_crd, avg_crd, cb_crd] 
@@ -18,13 +19,20 @@ def DomainDistances( Ref_Coords, PDB_Coords, RefReg2, Reg2, Data, output ):
   print('##################################################################\n')
 
   # Create distance object for MPI
-  mpi = multiprocessing.Pool(processes = multiprocessing.cpu_count())
   Ref = CalculateDist( [Ref_Coords, RefReg2] )
-  Tmp = [CalculateDist([Tgt,Reg2[idx]]) for idx,Tgt in enumerate(PDB_Coords)]
-#  Tmp = [x for x in tqdm(mpi.imap_unordered( CalculateDist, list(zip(PDB_Coords, Reg2))),
-#                                       total=len(Reg2))]
-  mpi.close()
-  mpi.join()
+
+  if parm['MPICPU'][0] == 1:
+    Tmp = [CalculateDist([Tgt,Reg2[idx]]) for idx,Tgt in enumerate(PDB_Coords)]
+  else:
+    if parm['MPICPU'][0] == 0:
+      mpi_cpu = multiprocessing.cpu_count()
+    else:
+      mpi_cpu = parm['MPICPU'][0]
+    mpi   = multiprocessing.Pool(mpi_cpu)
+    Tmp = [x for x in tqdm(mpi.imap( CalculateDist, list(zip(PDB_Coords, Reg2)) ),
+                                      total=len(Reg2))]
+    mpi.close()
+    mpi.join()
 
   Tgt_List = [x for x in Tmp if x is not None]
   print('\n ## Domain Distances return: {0}\n'.format(len(Tgt_List)))
@@ -79,7 +87,7 @@ def CalculateDist( Input ):
   try:
     H_rg = Reg2[ArrayCent(len(Reg2))]
   except TypeError:
-    print('\n  #2#  Domain Warning: Reg2 (C-helix linear regression) failed: '+pdb_id)
+    print('\n  #2# Domain Warning: Reg2 \033[36m(C-helix linear regression)\033[0m failed: '+pdb_id)
     H_rg = None
 
   # Check if side chain is there by using H_cb presence
@@ -214,10 +222,10 @@ def RetreiveCoords( Coords ):
   else:
     print('\n  #1# Domain -- C-lobe residue missing CA: '+pdb_id)
   if Coords[3][ArrayCent(len(Coords[3]))][4] is not None:
-    C_cg = Coords[3][ArrayCent(len(Coords[3]))][4]
+    C_cg = Coords[3][int(ArrayCent(len(Coords[3])))][4]
   else:
     print('\n  #1# Domain -- C-lobe residue missing CG: '+pdb_id)
-    C_cg = Coords[3][ArrayCent(len(Coords[3]))][3]
+    C_cg = Coords[3][int(ArrayCent(len(Coords[3])))][3]
 
   return [ H_ca, H_cb, H_cg, H_cd, N_ca, N_cg, N_cd, C_ca, C_cg ]
 

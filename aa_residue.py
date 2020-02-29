@@ -1,4 +1,6 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
+
+## 20.02.26 - duplicate those that have 1- or 2-letter PDB_ID code
 
 ##########################################################################
 # Natural amino acid 3-letter <-> 1-letter conversion
@@ -245,6 +247,15 @@ sh_dict = {
 ' CA':'',   # calcium ion
 ' SR':'',   # strontium ion
 ' BA':'',   # barium ion
+'LI':'',   # lithium ion
+'NA':'',   # sodium ion
+'K':'',   # potassium ion
+'RB':'',   # rubidium ion
+'CS':'',   # cesium ion
+'MG':'',   # magnesium ion
+'CA':'',   # calcium ion
+'SR':'',   # strontium ion
+'BA':'',   # barium ion
 
 ' MN':'',   # managese ion
 ' ZN':'',   # zinc ion
@@ -262,11 +273,28 @@ sh_dict = {
 '  W':'',   # tungstein ion
 ' TL':'',   # thallium ion
 'YT3':'',   # yttrium(+3) cation
+'MN':'',   # managese ion
+'ZN':'',   # zinc ion
+'CO':'',   # cobalt2 ion
+'MO':'',   # molybdenum 
+'CD':'',   # cadium ion
+'NI':'',   # nickel ion
+'PB':'',   # lead2 ion
+'HG':'',   # mercery ion
+'AU':'',   # gold ion
+'FE':'',   # iron3 ion
+'CU':'',   # copper2 ion
+'W':'',   # tungstein ion
+'TL':'',   # thallium ion
+
 
 ' CL':'',
+'CL':'',
 ' BR':'',
+'BR':'',
 'IOD':'',   # iodide ion
 ' OH':'',   # hydroxide ion
+'OH':'',   # hydroxide ion
 'SCN':'',   # thiocyanate ion
 'CYN':'',   # cyanide ion
 'AZI':'',   # azide ion
@@ -291,6 +319,7 @@ sh_dict = {
 'UNK':'',   # unknown
 'UNX':'',   # unknown
 ' UN':'',
+'UN':'',
 }
 
 # Check if residue is salt or un-natural amino acid
@@ -319,6 +348,7 @@ nc_dict = {
   '0O2':'', # guanosine 5'-(tetrahydrogen triphosphate) 3'-(trihydrogen diphosphate)
   'ANP':'', # PHOSPHOAMINOPHOSPHONIC ACID-ADENYLATE ESTER	
   '  A':'', # ADENOSINE-5'-MONOPHOSPHATE	
+  'A':'', # ADENOSINE-5'-MONOPHOSPHATE	
   'A23':'', # ADENOSINE-5'-PHOSPHATE-2',3'-CYCLIC PHOSPHATE	
   'A2M':'', # 2'-O-methyladenosine 5'-(dihydrogen phosphate)	
   'A2P':'', # ADENOSINE-2'-5'-DIPHOSPHATE	
@@ -332,6 +362,7 @@ nc_dict = {
   'AP2':'', # PHOSPHOMETHYLPHOSPHONIC ACID ADENOSYL ESTER	
   'APC':'', # DIPHOSPHOMETHYLPHOSPHONIC ACID ADENOSYL ESTER	
   ' AS':'', # 2-DEOXY-ADENOSINE -5'-THIO-MONOPHOSPHATE	
+  'AS':'', # 2-DEOXY-ADENOSINE -5'-THIO-MONOPHOSPHATE	
   'ABP':'', # 8-BROMOADENOSINE-5'-DIPHOSPHATE	
   'ACP':'', # PHOSPHOMETHYLPHOSPHONIC ACID ADENYLATE ESTER	
   'ACQ':'', # DIPHOSPHOMETHYLPHOSPHONIC ACID ADENYLATE ESTER	
@@ -355,11 +386,12 @@ nc_dict = {
   'AU1':'', # 5'-O-[(R)-hydroxy(phosphonoamino)phosphoryl]adenosine	
   'DAT':'', # 2'-DEOXYADENOSINE-5'-DIPHOSPHATE	
   ' DA':'', # 2'-DEOXYADENOSINE-5'-MONOPHOSPHATE	
+  'DA':'', # 2'-DEOXYADENOSINE-5'-MONOPHOSPHATE	
   'CTP':'', # CYTIDINE-5'-TRIPHOSPHATE	
   'JZU':'', # 5'-deoxy-5'-(sulfamoylamino)adenosine	
   'LA8':'', # L-ADENOSINE-5'-DIPHOSPHATE	
   'M33':'', # 5'-O-[(S)-hydroxy{[(S)-hydroxy(methyl)phosphoryl]oxy}phosphoryl]adenosine	
- }
+}
 
 def Nucleotides(name):
   if name in nc_dict:

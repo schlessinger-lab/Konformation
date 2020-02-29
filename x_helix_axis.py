@@ -1,30 +1,38 @@
 #!/usr/bin/env python3
 
 import re,sys
-from pathos import multiprocessing
-from tqdm import tqdm
 import numpy as np
 
-from aa_residue import *
+from tqdm import tqdm
 from numpy.linalg import norm
+from pathos import multiprocessing
 np.seterr(invalid='ignore')
+
+from aa_residue import AA
 
 ##########################################################################
 ## Compare the Helix axis and distance between the Reference and Target axes
 ## Run using MPI then print out the results into an output file
-def HelixMeasurements(Ref_Coords, Tgt_Coords, Data, output):
+def HelixMeasurements( Ref_Coords, Tgt_Coords, Data, parm, output ):
   # Input_Coords = [pdb_name, H_Crds, N_Crds, C_Crds, G_Crds, R_Crds, T_Crds]
   #     x_Coords = [resname, resid, bb_crds, ca_crd, cg_crd, avg_crd, cb_crd] 
 
   print('##################################################################\n')
 
   # Create helix object for MPI
-  mpi = multiprocessing.Pool(processes = multiprocessing.cpu_count())
   Ref = HelixAxis(Ref_Coords)
-#  Tmp = [ HelixAxis(Tgt) for Tgt in Tgt_Coords ]
-  Tmp = [x for x in tqdm(mpi.imap_unordered(HelixAxis, Tgt_Coords), total=len(Tgt_Coords))]
-  mpi.close()
-  mpi.join()
+
+  if parm['MPICPU'][0] == 1:
+    Tmp = [ HelixAxis(Tgt) for Tgt in Tgt_Coords ]
+  else:
+    if parm['MPICPU'][0] == 0:
+      mpi_cpu = multiprocessing.cpu_count()
+    else:
+      mpi_cpu = parm['MPICPU'][0]
+    mpi   = multiprocessing.Pool(mpi_cpu)
+    Tmp = [x for x in tqdm(mpi.imap_unordered(HelixAxis, Tgt_Coords), total=len(Tgt_Coords))]
+    mpi.close()
+    mpi.join()
 
   # Tgt = [ pdb_id, res_id, axis, cg_nom, cg_vec, sc_vec,
   #         sc_pres, cg_pres, curve, phi, psi, r_median, r_std,
@@ -86,14 +94,15 @@ def HelixAxis( Input ):
 
   # Check for missing residues
   if Pre_Coords is None:
-    print('  # Helix Warning: Too short to calculate: {0}'.format(pdb_id))
+    print('  # Helix Warning: Too short to calculate: \033[31m{0}]033[0m'.format(pdb_id))
     return None_Coord
   for idx, Seq in enumerate(Pre_Coords):
     if Seq is None:
       print('\n  #2# Helix Warning: Missing residue: {0}\t{1}'.format(pdb_id,idx+1))
       return None_Coord
 
-  Center = Pre_Coords[ ArrayCent(len(Pre_Coords)) ]
+
+  Center = Pre_Coords[ArrayCent(len(Pre_Coords))]
   res_id = AA(Center[0])+str(Center[1])
   
   # reformat the backbone atoms N,CA,C array (bb_coords)
@@ -101,6 +110,10 @@ def HelixAxis( Input ):
     Coords = np.asarray(sum(list(zip(*Pre_Coords))[2],[]))
   except TypeError:
     print('\n  #2# Helix Warning: Cannot read data - TypeError: '+pdb_id)
+    return None_Coord
+
+  if len(Coords) < 7:
+    print('\n  #2# Helix Warning: Helix too short to calculate: \033[31m{0}\033[0m'.format(pdb_id))
     return None_Coord
 
   # Calculate helix normal vector and helix center line (1st/2nd-regression),
@@ -115,9 +128,9 @@ def HelixAxis( Input ):
   # sc_pres = h_sc_x = cg_vec.sc_vec	cg_pres = h_cg_x = cg_vec.cb_vec
   cg_vec, cg_nom, sc_vec, sc_pres, cg_pres = None, None, None, None, None
   if Center[4] is not None:
-    cg_vec  = np.array( Center[4] - Reg2[ArrayCent(len(Coords))] )
-    sc_vec  = np.array( Center[5] - Reg2[ArrayCent(len(Coords))] )
-    cb_vec  = np.array( Center[6] - Reg2[ArrayCent(len(Coords))] )
+    cg_vec  = np.array( Center[4] - Reg2[int(ArrayCent(len(Coords)))] )
+    sc_vec  = np.array( Center[5] - Reg2[int(ArrayCent(len(Coords)))] )
+    cb_vec  = np.array( Center[6] - Reg2[int(ArrayCent(len(Coords)))] )
 
     cg_nom  = np.cross(axis/VecMag(axis), cg_vec/VecMag(cg_vec))
     sc_pres = np.dot(cg_vec/VecMag(cg_vec), sc_vec/VecMag(sc_vec))
@@ -126,8 +139,8 @@ def HelixAxis( Input ):
     # If CB is available, substitute CG with CB for CG-vector
     if Center[6] is not None:
       print('\n  #1# Helix Warning: No CG, use "CB" for Ax-Cg vector: '+pdb_id)
-      cb_vec = np.array( Center[6] - Reg2[ArrayCent(len(Coords))] )
-      sc_vec = np.array( Center[5] - Reg2[ArrayCent(len(Coords))] )
+      cb_vec = np.array( Center[6] - Reg2[int(ArrayCent(len(Coords)))] )
+      sc_vec = np.array( Center[5] - Reg2[int(ArrayCent(len(Coords)))] )
       cg_vec = cb_vec
 
       cg_nom  = np.cross(axis/VecMag(axis), cg_vec/VecMag(cg_vec))
@@ -140,16 +153,16 @@ def HelixAxis( Input ):
   if curve is None:
     print('\n  #1# Helix Warning: Helix residues < 5, skip "curv": '+pdb_id)
 
-  return [ pdb_id, res_id, axis, cg_nom, cg_vec, sc_vec, 
-           sc_pres, cg_pres, curve, phi, psi, r_median, r_std, 
-           Reg2 ]
+  return  [ pdb_id, res_id, axis, cg_nom, cg_vec, sc_vec, 
+            sc_pres, cg_pres, curve, phi, psi, r_median, r_std, 
+            Reg2 ]
 
 
 #########################################################################
 ## Calculate the helix axis using coordinates supplied, calculate 1st- and 2nd-
 ## order regression curves to represent helix axis. Calculate the helix 
 ## curvature centering at conserved Glu
-def CalculateHelixAxis(Input):
+def CalculateHelixAxis( Input ):
 
   Coords = np.asarray(Input)
   count  = len(Coords)
@@ -166,19 +179,23 @@ def CalculateHelixAxis(Input):
     posit  = 1
   xcount = count - posit    # reduced number of points to do LSQ
 
-  Fn1Pts, Fn2Pts = [], []
-  for m in range(0,posit):
-    Fn1 = [LsqFit(list(range(xcount)), Coords[m:m-posit, x],1) for x in range(3)]
-    Fn1Pts.append( [np.asarray([f(x) for f in Fn1]) for x in range(count) ])
-    Fn2 = [LsqFit(list(range(xcount)), Coords[m:m-posit, x],2) for x in range(3)]
-    Fn2Pts.append( [np.asarray([f(x) for f in Fn2]) for x in range(count) ])
+  ## maximum of 10 tries to calculate Reg2 until it yield result
+  ## this is to counter a bug with numpy ployfit where it fails randomly
+  ## when running a lot of things but doing fine when only running a few things
+  for idx in range(10):
+    Fn1Pts, Fn2Pts = [], []
+    for m in range(0,posit):
+      Fn1 = [LsqFit(list(range(xcount)), Coords[m:m-posit, x],1) for x in range(3)]
+      Fn1Pts.append( [np.asarray([f(x) for f in Fn1]) for x in range(count) ])
+      Fn2 = [LsqFit(list(range(xcount)), Coords[m:m-posit, x],2) for x in range(3)]
+      Fn2Pts.append( [np.asarray([f(x) for f in Fn2]) for x in range(count) ])
 
-  H_Curv = [ CalcCurvature2(Fn2) for Fn2 in Fn2Pts ]
-#  h_curv = ( H_Curv[2]+H_Curv[3] )/2
-#  hc_std = np.std(H_Curv[2:4])
+    H_Curv = [ CalcCurvature2(Fn2) for Fn2 in Fn2Pts ]
+#    h_curv = ( H_Curv[2]+H_Curv[3] )/2
+#    hc_std = np.std(H_Curv[2:4])
 
-  Reg1 = np.mean(Fn1Pts, axis=0)
-  Reg2 = np.mean(Fn2Pts, axis=0)
+    Reg1 = np.mean(Fn1Pts, axis=0)
+    Reg2 = np.mean(Fn2Pts, axis=0)
   Start, End, Center = Reg1[0], Reg1[-1], Reg2[ ArrayCent(count) ]
 
   if posit > 1:   
@@ -196,7 +213,7 @@ def CalculateHelixAxis(Input):
 ## Calculate the spherical angles of a vector relative to z-axis
 ## Phi as angle (y-axis); Psi as dihedral angle (z-axis) between 2 vectors
 def SphericalAngles(vec):
-  
+
   # phi for vector to xz-plane/x_axis angle
   x_axis = [1,0,0] 
   norm   = VecMag([vec[0],vec[1],0])
@@ -216,7 +233,8 @@ def HelixRadius(Coords, Reg2Pts, infile):
 
   count = len(Coords)
   if count != len(Reg2Pts):
-    sys.exit('\n  #2# Helix FATAL: no. of regression points does not match number of coord points: '+Coords[0])
+    sys.exit('\n  \033[31m#2# Helix FATAL:\033[0m No. of regression points does not match number of coord points: \033[35m{0}\033[0m'.format(Coords[0]))
+
   # Cylindrical coodinates of helix
   Dist  = [VecMag(Coords[i]-Reg2Pts[i]) for i in range(count)]
   d     = np.poly1d(np.polyfit(list(range(count)), Dist, 1, full=False))
@@ -231,7 +249,7 @@ def HelixRadius(Coords, Reg2Pts, infile):
 ## no need for the complex tangent/acceleration calculation in
 ## https://stackoverflow.com/questions/28269379/curve-curvature-in-numpy
 def CalcCurvature2( Curve ):
-  
+
   ## Generalized curvature expression, independent of the nth-dimension
   ## first calculate 1st and 2nd derivatives of list of curve points
   ## double vertical bar = norm (length) of a vector (not unit vector)
@@ -243,13 +261,13 @@ def CalcCurvature2( Curve ):
 
   # Take the curvature vector of middle of curve as representative
   if len(curvature) % 2 == 0:
-    mid  = len(curvature)/2
+    mid  = int( len(curvature)/2 )
     take = (curvature[mid-1] + curvature[mid])/2
   else:
-    mid = (len(curvature)-1)/2
+    mid = int( (len(curvature)-1)/2 )
     take = curvature[mid]
 
-  return curvature[mid]
+  return take
 
 
 ##########################################################################
@@ -269,7 +287,7 @@ def ArrayCent( count ):
     center = count/2-1
   else:              
     center = ((count-1)/2)
-  return center
+  return int(center)
 
 
 ##########################################################################
