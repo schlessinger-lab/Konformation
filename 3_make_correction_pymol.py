@@ -20,7 +20,7 @@ import sys,os
 msg = '''
   > {0}
     [ List of PDB with missing structural info ]\n
-e.g.>  x.py   kinfomation.missing.txt\n'''.format(sys.argv[0])
+e.g.>  x.py   kinfo_pdb.example.missing.txt\n'''.format(sys.argv[0])
 if len(sys.argv) != 2: sys.exit(msg)
 
 with open(sys.argv[1], 'r') as fi:

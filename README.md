@@ -115,7 +115,7 @@ e.g.>  4_kinase_conf_ML_only.py
 
 
 ##########################################################################
-- **Extract PDB Header information**
+- **Extract PDB Header and Ligand information**
 ```
 5_extract_pdb_header_info.py
     [ list of PDB ]
@@ -146,6 +146,18 @@ columns = [ 'pdb_id',  'chain_id', 'pdb_length', 'uni_length', 'uni_id',
 
 - The search process cannot use MPI, RCSB blocks multiple requests from same IP address simultaneous? (prevent DoS attack?) 
 
+##########
+
+```
+6_extract_pdb_ligand.py
+    [ Input file of Parsed PBB Header file with "pdb_id" and "ligand" ]
+    [ Output prefix ]
+
+ e.g.> ./6_extract_pdb_ligand.py
+          test-sample.example.csv.gz  test-again
+```
+
+- From an input file of Parsed PDB Header file with information on  "pdb_id" and "ligand" (result from **5_extract_pdb_header_info.py**), download the SMILES string of bound ligands and associate these ligands to the "pdb_id" they came from.
 
 ##########################################################################
 - **Example 1: Retreive new kinase structures that is not in PDB collection**
@@ -203,11 +215,14 @@ columns = [ 'pdb_id',  'chain_id', 'pdb_length', 'uni_length', 'uni_id',
 > examples/
     |--4_get_pdb_info
             |------ run_get_pdb_info.sh    # running this example
+            |------ run_get_ligand_info.sh # running this example
             |------ test.list              # list of PDB to extract data
-            |------ test-sample.csv.gz     # sample result, csv
-            |------ test-sample.xlsx       # sample result, xlsx
+            |------ test-sample.csv.gz     # sample PDB result, csv
+            |------ test-sample.xlsx       # sample PDBresult, xlsx
+            |------ test-again.csv.gz      # sample ligand result, csv
+            |------ test-again.xlsx        # sample ligand result, xlsx
 ```
-- This example runs through all PDB structures (particular chain) and retreive the relevant data contained in PDB Header, e.g. publication date, ligands, mutations, modifications, resolutions, etc.
+- This example runs through all PDB structures (particular chain) and retreive the relevant data contained in PDB Header, e.g. publication date, ligands, mutations, modifications, resolutions, etc.; the other script will read from the file of Parsed PDB Header file to download the SMILES string of bound ligands and associate these ligands to the "pdb_id" they came from.
 
 ##########################################################################
 - **Required packages**
@@ -227,7 +242,10 @@ columns = [ 'pdb_id',  'chain_id', 'pdb_length', 'uni_length', 'uni_id',
     sklearn       # 0.22.1  # may not be backward compatible
     tqdm          # 4.31.1+
     pathos        # 0.2.3+
+    rdkit         # 2019.09.2
     requests      # 2.21.0
+    time          #
+    xmltodict     # 0.12.0
     tzlocal       # 2.0.0
 
 Retired

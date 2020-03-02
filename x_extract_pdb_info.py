@@ -4,6 +4,7 @@ import re
 import os
 import time
 import requests
+import xmltodict
 
 import numpy as np
 import pandas as pd
@@ -64,45 +65,36 @@ def SearchPDB( pdb ):
   ec, pmid, p_name, uni_id = None, None, None, None
   resolu, deposit, release, latest = None, None, None, None
 
-  ## Retreive basic PDB data from RCSB query search
-  ## delay retrieve by 0.1s to avoid server from download lockout (prevent downloading)
-  html_pdb   = 'https://www.rcsb.org/pdb/rest/describePDB?structureId={0}'.format(pdb_id)
-  html_chain = 'https://www.rcsb.org/pdb/rest/describeMol?structureId={0}.{1}'.format(pdb_id, chain_id)
-  pdb_info   = requests.get(html_pdb)
+  ## Downloaded PDB info, convert XML into dict and extract data
+  html_pdb = 'https://www.rcsb.org/pdb/rest/describePDB?structureId={0}'.format(pdb_id)
+  pdb_info = requests.get(html_pdb)
+  pdb_dict = xmltodict.parse(pdb_info.content.decode())
+  pdbx     = pdb_dict['PDBdescription']['PDB']
+
+  pmid   = pdbx['@pubmedId']
+  resolu = pdbx['@resolution']
+  deposit= pdbx['@deposition_date']
+  release= pdbx['@release_date']
+  latest = pdbx['@last_modification_date']
+  authors= pdbx['@citation_authors']
+
+## delay retrieve by 0.1s to avoid server from download lockout (prevent downloading)
   time.sleep(0.1)
+
+  ## Download individual PDB chain info, convert XML into dict and extract
+  html_chain = 'https://www.rcsb.org/pdb/rest/describeMol?structureId={0}.{1}'.format(pdb_id, chain_id)
   chain_info = requests.get(html_chain)
+  chain_dict = xmltodict.parse(chain_info.content.decode())
+  chnx       = chain_dict['molDescription']['structureId']['polymer']
 
-  ## downloaded FASTA is byte, need to split it into individual chains by '>',
-  ## then concatenate pdb_id and chain_id. Split string by 'SEQUENCE', then
-  ## remove all '\n'
-  pdbx = [ re.sub('/|<','', x).strip() for x in pdb_info.content.decode().split('>') if x is not '' ]
-  chnx = [ re.sub('/|<','', x).strip() for x in chain_info.content.decode().split('>') if x is not '' ]
+  pdb_length = chnx['@length']
+  weight     = float(chnx['@weight'])
+  tax_id     = chnx['Taxonomy']['@id']
+  species    = chnx['Taxonomy']['@name']
+  p_name     = chnx['macroMolecule']['@name']
+  uni_id     = chnx['macroMolecule']['accession']['@id']
+  ec         = chnx['enzClass']['@ec']
 
-  for l in pdbx:
-    if re.search('structureId', l):
-      if re.search('pubmedId=', l):
-        pmid   = re.sub('"', '', l.split('pubmedId=')[1].split()[0])
-      if re.search('resolution=', l):
-        resolu = re.sub('"', '', l.split('resolution=')[1].split()[0])
-      if re.search('deposition_date=', l):
-        deposit= re.sub('"', '', l.split('deposition_date=')[1].split()[0])
-      if re.search('release_date=', l):
-        release= re.sub('"', '', l.split('release_date=')[1].split()[0])
-      if re.search('last_modification_date=', l):
-        latest = re.sub('"', '', l.split('last_modification_date=')[1].split()[0])
-
-  for l in chnx:
-    if re.search('length=', l):
-      pdb_length = int(re.sub('"', '', l.split('length=')[1].split()[0]))
-    if re.search('Taxonomy ', l):
-      tax_id  = re.sub('"', '', l.split(' id=')[1])
-      species = re.sub('"', '', l.split(' name=')[1].split(' id')[0])
-    if re.search('macroMolecule ', l):
-      p_name  = re.sub('"', '', l.split(' name=')[1])
-    if re.search('accession id=', l):
-      uni_id  = re.sub('"', '', l.split(' id=')[1])
-    if re.search('enzClass ec=', l):
-      ec = re.sub('"', '', l.split(' ec=')[1])
 
 #########################################
   ## Find UniProt ID, chain ID, chain Length, in PDB webpage
@@ -116,7 +108,7 @@ def SearchPDB( pdb ):
   Entity[chain_id].chain = chain_id
 
 ################################
-  # Retrieve data from HEADER data in RCSB webpages
+  # Retrieve data from HEADER data in RCSB webpages. Data is not XML format
   html_head = 'https://files.rcsb.org/header/{0}.pdb'.format(pdb_id)
   head_info = requests.get(html_head)
   headx = [ x for x in head_info.content.decode().split('\n') if x is not '' ]
@@ -193,16 +185,16 @@ def SearchPDB( pdb ):
             aa_modif = ''.join(lig_name)
           else:
             aa_modif += '|'+lig_name
+          continue
 
     ## if it is salt ions and additives, etc
     if SaltAdditive(het_id):
+      if UnnaturalAA(het_id):
+        continue
       if salt is None:
         salt = ''.join(lig_name)
       else:
         salt += '|'+lig_name
-    ## if it is unnatural Amino Acids, ignore -- registered by aa_modif
-    elif UnnaturalAA(het_id):
-      continue    # if ligands, save; multiple ligands, use '|' as separator
     else:
       if ligand is None:
         ligand = ''.join(lig_name)
@@ -335,3 +327,10 @@ def SearchUniProt(uni_id, pdb_id):
   return uni_length
 
 ###########################################################################
+#
+#  Peter M.U Ung @ MSSM/Yale
+#
+#  v1.0   20.01
+#  v2.0   20.03.01  change result xml reading from string parsing to dict
+#
+#
