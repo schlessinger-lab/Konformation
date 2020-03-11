@@ -2,6 +2,7 @@
 
 import re
 import os
+import sys
 import time
 import requests
 import xmltodict
@@ -18,37 +19,57 @@ from tqdm import tqdm
 ##########################################################################   
 ## Read in pdb list with different formats:
 # Format of the list:
-#  1) <pdb_id>_<chain_id>.xxx.pdb
-#  2) <pdb_id>_<chain_id>.xxx.pdb <chain_id>
-#  3) <pdb_id>.xxx.pdb            <chain_id>
-#  4) <pdb_id>                    <chain_id>
+#  1) <pdb>_<chain_id>.xxx.pdb
+#  2) <pdb>_<chain_id>.xxx.pdb <chain_id>
+#  3) <pdb>.xxx.pdb            <chain_id>
+#  4) <pdb>                    <chain_id>
 #  (PDB ID and chain ID separated by '_')
 #
 #  e.g.:   1ATP_E.xxx.pdb
+#          1ATP_E
 #          3HHP.xxx.pdb    C
 #          6GTT            A
+#          6GTT_A          A  cidi
+#          3HHP_A          C
 def ProcessPDBList( pdb_list ):
   PDB_List = pd.read_csv(pdb_list, sep='\s+', header=None, comment='#').to_numpy()
 
   PDB   = []
   for entry in PDB_List:
-    if len(entry) == 2:
+    conf = None
+    if len(entry) == 1:
       if re.search(r'.pdb', entry[0]):
-        pdb_id   = entry[0].split('.')[0].split('_')[0]
+        pdb_id   = entry[0].split('.')[0]
+        pdb      = entry[0].split('.')[0].split('_')[0]
         chain_id = entry[0].split('.')[0].split('_')[1]
       else:
         pdb_id   = entry[0]
-      if type(entry[1]) == str:
-        chain_id = entry[1]
-      PDB.append([pdb_id, chain_id])
-    elif len(entry) == 1:
-      if re.search(r'.pdb', entry):
-        pdb_id   = entry.split('.')[0].split('_')[0]
-        chain_id = entry.split('.')[0].split('_')[1]
+        pdb      = entry[0].split('_')[0]
+        chain_id = entry[0].split('_')[1]
+      PDB.append([pdb_id, pdb, chain_id, conf])
+
+    elif len(entry) >= 2:
+      if re.search(r'.pdb', entry[0]):
+        if re.search('_', entry[0]):
+          pdb_id   = entry[0].split('.')[0]
+          pdb      = entry[0].split('.')[0].split('_')[0]
+          chain_id = entry[0].split('.')[0].split('_')[1]
+        else:
+          pdb      = entry[0].split('.')[0]
+          chain_id = entry[1]
+          pdb_id   = pdb+'_'+chain_id
       else:
-        pdb_id   = entry.split('_')[0]
-        chain_id = entry.split('_')[1]
-      PDB.append([pdb_id, chain_id])
+        if re.search('_', entry[0]):
+          pdb_id   = entry[0]
+          pdb      = entry[0].split('_')[0]
+          chain_id = entry[0].split('_')[1]
+        else:
+          pdb      = entry[0]
+          chain_id = entry[1]
+          pdb_id   = pdb+'_'+chain_id
+      if len(entry) == 3:
+        conf = entry[2]
+      PDB.append([pdb_id, pdb, chain_id, conf])
     else:
       sys.exit('\033[31m ERROR: PDB list format is invalid\033[0m')
 
@@ -56,60 +77,83 @@ def ProcessPDBList( pdb_list ):
 
 
 ##########################################################################
+#   Format for -c <csv> header:
+#   'pdb_id','Class','cidi_prob','cido_prob','codi_prob',...
+def ProcessCSVList( csv_list ):
+
+  def get_pdb_id( inp ):
+    return inp.split('_')[0]
+  def get_chain_id( inp ):
+    return inp.split('_')[1]
+
+  PDB_df = pd.read_csv(csv_list, sep=',', comment='#')
+  PDB_List = PDB_df[['pdb_id','Class']]
+
+  PDB_List['pdb']      = PDB_List['pdb_id'].apply(get_pdb_id)
+  PDB_List['chain_id'] = PDB_List['pdb_id'].apply(get_chain_id)
+
+  return PDB_List[['pdb_id','pdb','chain_id','Class']].to_numpy()
+
+
+##########################################################################
 ## Download the PDB page from the Web and search for the UniProt ID
-def SearchPDB( pdb ):
-  pdb_id, chain_id = pdb
-#  print(pdb_id, chain_id)
+def SearchPDB( inp ):
+  pdb_id, pdb, chain_id, conf = inp
 
   pdb_length, uni_id, tax_id, species = None, None, None, None
   ec, pmid, p_name, uni_id = None, None, None, None
   resolu, deposit, release, latest = None, None, None, None
 
   ## Downloaded PDB info, convert XML into dict and extract data
-  html_pdb = 'https://www.rcsb.org/pdb/rest/describePDB?structureId={0}'.format(pdb_id)
+  html_pdb = 'https://www.rcsb.org/pdb/rest/describePDB?structureId={0}'.format(pdb)
   pdb_info = requests.get(html_pdb)
   pdb_dict = xmltodict.parse(pdb_info.content.decode())
   pdbx     = pdb_dict['PDBdescription']['PDB']
 
-  pmid   = pdbx['@pubmedId']
-  resolu = pdbx['@resolution']
-  deposit= pdbx['@deposition_date']
-  release= pdbx['@release_date']
-  latest = pdbx['@last_modification_date']
-  authors= pdbx['@citation_authors']
+  ## not all values are available, some can be missing
+  if '@pubmedId' in pdbx:         pmid   = pdbx['@pubmedId']
+  if '@resolution' in pdbx:       resolu = pdbx['@resolution']
+  if '@deposition_date' in pdbx:  deposit= pdbx['@deposition_date']
+  if '@release_date' in pdbx:     release= pdbx['@release_date']
+  if '@last_modification_date' in pdbx: latest = pdbx['@last_modification_date']
+  if '@citation_authors' in pdbx: authors= pdbx['@citation_authors']
 
 ## delay retrieve by 0.1s to avoid server from download lockout (prevent downloading)
   time.sleep(0.1)
 
   ## Download individual PDB chain info, convert XML into dict and extract
-  html_chain = 'https://www.rcsb.org/pdb/rest/describeMol?structureId={0}.{1}'.format(pdb_id, chain_id)
+  html_chain = 'https://www.rcsb.org/pdb/rest/describeMol?structureId={0}.{1}'.format(pdb, chain_id)
   chain_info = requests.get(html_chain)
   chain_dict = xmltodict.parse(chain_info.content.decode())
   chnx       = chain_dict['molDescription']['structureId']['polymer']
 
-  pdb_length = chnx['@length']
-  weight     = float(chnx['@weight'])
-  tax_id     = chnx['Taxonomy']['@id']
-  species    = chnx['Taxonomy']['@name']
-  p_name     = chnx['macroMolecule']['@name']
-  uni_id     = chnx['macroMolecule']['accession']['@id']
-  ec         = chnx['enzClass']['@ec']
+  if '@length' in chnx:   pdb_length = chnx['@length']
+  if '@weight' in chnx:   weight     = float(chnx['@weight'])
+  if 'Taxonomy' in chnx:
+    if '@id' in chnx['Taxonomy']:   tax_id     = chnx['Taxonomy']['@id']
+    if '@name' in chnx['Taxonomy']: species    = chnx['Taxonomy']['@name']
+  if 'macroMolecule' in chnx:
+    if '@name' in chnx['macroMolecule']: p_name     = chnx['macroMolecule']['@name']
+    if 'accession' in chnx['macroMolecule']:
+      if '@id' in chnx['macroMolecule']['accession']:
+        uni_id     = chnx['macroMolecule']['accession']['@id']
+  if 'enzClass' in chnx:  ec         = chnx['enzClass']['@ec']
 
 
 #########################################
   ## Find UniProt ID, chain ID, chain Length, in PDB webpage
 
   Entity = {}
-  Entity[chain_id] = HeadData(pdb_id=pdb_id, chain_id=chain_id, ec=ec,
-                              pdb_length=pdb_length, uni_id=uni_id,
-                              taxid=tax_id, species=species, p_name=p_name,
-                              pmid=pmid, resolu=resolu, latest=latest,
-                              deposit=deposit, release=release)
+  Entity[chain_id] = HeadData(pdb_id=pdb_id, pdb=pdb, chain_id=chain_id, 
+                              conf=conf, pdb_length=pdb_length, uni_id=uni_id,
+                              ec=ec, taxid=tax_id, species=species, 
+                              p_name=p_name, pmid=pmid, resolu=resolu, 
+                              latest=latest, deposit=deposit, release=release)
   Entity[chain_id].chain = chain_id
 
 ################################
   # Retrieve data from HEADER data in RCSB webpages. Data is not XML format
-  html_head = 'https://files.rcsb.org/header/{0}.pdb'.format(pdb_id)
+  html_head = 'https://files.rcsb.org/header/{0}.pdb'.format(pdb)
   head_info = requests.get(html_head)
   headx = [ x for x in head_info.content.decode().split('\n') if x is not '' ]
 
@@ -261,8 +305,7 @@ def SearchPDB( pdb ):
         Entity[chain_id].salt     = HD[mol_id].salt
         Entity[chain_id].aa_modif = HD[mol_id].aa_modif
         Entity[chain_id].crystal  = HD[mol_id].crystal
-        Entity[chain_id].uni_length = SearchUniProt( Entity[chain_id].uni_id,
-                                                Entity[chain_id].pdb_id )
+        Entity[chain_id].uni_length = SearchUniProt( Entity[chain_id].uni_id )
 
   return Entity
 
@@ -270,16 +313,18 @@ def SearchPDB( pdb ):
 ##########################################################################
 ## Object to store Data. To make it a iterable dict in python3, output has iter()
 class HeadData(object):
-  def __init__(self, pdb_id=None, chain_id=None, uni_id=None,
-                    pdb_length=None, uni_length=None,
+  def __init__(self,pdb_id=None, pdb=None, chain_id=None, conf=None, 
+                    uni_id=None, pdb_length=None, uni_length=None,
                     p_name=None, chain=None, ec=None, gene=None,
                     species=None, common=None, taxid=None,
                     pmid=None, deposit=None, release=None, latest=None, 
                     resolu=None, mutate=None, mutation=None, space=None, 
                     ligand=None, salt=None, aa_modif=None,
                     crystal=None, seqadv=None, dbref=None ):
-      self.pdb_id = pdb_id      # pdb ID for PDB (orig input)
-      self.chain_id = chain_id    # pdb chain ID for PDB (orig input)
+      self.pdb_id = pdb_id      # pdb_x ID for PDB and chain ID
+      self.pdb = pdb            # pdb ID for PDB (orig input)
+      self.chain_id = chain_id  # pdb chain ID for PDB (orig input)
+      self.conf = conf          # xtal conformation from Konformation  
       self.uni_id = uni_id              # uniprot ID found in Entity query
       self.pdb_length = pdb_length      # chain length found in Entity query
       self.uni_length = uni_length      # (full) chain length found in uniprot
@@ -311,7 +356,7 @@ class HeadData(object):
 
 ##########################################################################
 # Search UniProt webpage for full-length data; only use canonical info
-def SearchUniProt(uni_id, pdb_id):
+def SearchUniProt( uni_id ):
 
   uni_length = None
   if uni_id is not None:

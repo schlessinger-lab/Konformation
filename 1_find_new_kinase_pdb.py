@@ -28,11 +28,18 @@ import sys,os
 #    retrieve with a delay of 0.1s in between seem to work fine.
 #
 ##########################################################################
+
+msg = '''
+  > {0}
+\t-r <file>  [ Read in Parameter file, search RCSB PDB for kinases ]\n
+Optional:
+\t-set       [ Generate Parameter file used by "-r" ]
+\t-p <file>  [ List of PDB to download directly (format: pdb_id\tchain_id) ]
+'''.format(sys.argv[0])
+if len(sys.argv) == 1: sys.exit(msg)
+
+#######################################################################
 import re
-import io
-import time
-import requests
-import contextlib
 
 import pandas as pd
 
@@ -57,15 +64,6 @@ from x_kinase_pdb_search_query import CheckKinaseSeqIdentity
 
 
 #######################################################################
-msg = '''
-  > {0}
-\t-r <file>  [ Read in Parameter file, search RCSB PDB for kinases ]\n
-Optional:
-\t-set       [ Generate Parameter file used by "-r" ]
-\t-p <file>  [ List of PDB to download directly (format: pdb_id\tchain_id) ]
-'''.format(sys.argv[0])
-if len(sys.argv) == 1: sys.exit(msg)
-
 def main():
   args  = cmdlineparse()
 

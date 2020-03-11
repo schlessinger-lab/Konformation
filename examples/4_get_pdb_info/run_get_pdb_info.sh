@@ -1,4 +1,6 @@
 
 ../../5_extract_pdb_header_info.py \
-  test.list   \
-  test-sample
+  -o test-pdb-info \
+  -c kinfo_pdb.example.SK_gb_kinfo_classify.csv   
+#  -l test.list 
+

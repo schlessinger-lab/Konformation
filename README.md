@@ -1,7 +1,10 @@
 # Kinformation
 **Classification of Protein Kinase (Catalytic Domain) Conformations**
 
-
+```
+  author: Peter M.U. Ung @ MSSM
+  vers:   2.0
+```
 __Citation 1:__ [\*Ung PMU, \*Rahman R, Schlessinger A. Redefining the Protein Kinase Conformational Space with Machine Learning. Cell Chemical Biology (2018) 25(7), 916-924.](https://doi.org/10.1016/j.chembiol.2018.05.002)
 
 __Citation 2:__ [\*Rahman R, \*Ung PMU, Schlessinger A. KinaMetrix: a web resource to investigate kinase conformations and inhibitor space. 
@@ -118,8 +121,10 @@ e.g.>  4_kinase_conf_ML_only.py
 - **Extract PDB Header and Ligand information**
 ```
 5_extract_pdb_header_info.py
-    [ list of PDB ]
-    [ output prefix ]
+    -o <str>     [ output prefix ]\n
+Optional:
+    -l <list>    [ list of PDB ]
+    -c <csv>     [ CSV with annotated conformation "pdb_id" and "Class"]\n
 
 Format of the list:
   1) <pdb_id>_<chain_id>.xxx.pdb
@@ -133,10 +138,10 @@ Format of the list:
           6GTT            A
 
  e.g.> 5_extract_pdb_header_info.py 
-        pdb.list   
-        pdb_info
+        -l pdb.list   
+        -o pdb_info
 
-columns = [ 'pdb_id',  'chain_id', 'pdb_length', 'uni_length', 'uni_id', 
+columns = [ 'pdb_id',  'chain_id', 'conf',       'pdb_length', 'uni_length', 'uni_id', 
             'gene',    'p_name',   'mutate',     'mutation',   'ec',
             'species', 'common',   'taxid',      'deposit',    'release', 'latest',
             'ligand',  'salt',     'aa_modif',   'resolu',     'space',   'pmid' ]
@@ -150,11 +155,11 @@ columns = [ 'pdb_id',  'chain_id', 'pdb_length', 'uni_length', 'uni_id',
 
 ```
 6_extract_pdb_ligand.py
-    [ Input file of Parsed PBB Header file with "pdb_id" and "ligand" ]
-    [ Output prefix ]
+    -in <file+>  [ One or more file of Parsed PBB Header file with "pdb_id" and "ligand" ]
+    -op <str>    [ Output prefix ]
 
  e.g.> ./6_extract_pdb_ligand.py
-          test-sample.example.csv.gz  test-again
+          -in test-sample.csv.gz test-sample2.csv.gz test-again
 ```
 
 - From an input file of Parsed PDB Header file with information on  "pdb_id" and "ligand" (result from **5_extract_pdb_header_info.py**), download the SMILES string of bound ligands and associate these ligands to the "pdb_id" they came from.
@@ -164,7 +169,7 @@ columns = [ 'pdb_id',  'chain_id', 'pdb_length', 'uni_length', 'uni_id',
 ```
 > examples/
     |--1_find_new_kinase_pdb
-            |------ run_find_new_kinase.sh    # running this setup
+            |--**-- run_find_new_kinase.sh    # running this setup
             |------ check_kinase.200227.fasta               # all aligned kinase PDB seq
             |------ check_kinase.200227.good_seq_ident.txt  # confirmed kinase PDB
             |------ check_kinase.200227.check_seq_ident.txt # ambigious kinase PDB, need check
@@ -181,7 +186,7 @@ columns = [ 'pdb_id',  'chain_id', 'pdb_length', 'uni_length', 'uni_id',
 ```
 > examples/
     |--2_classify_kinase_conf
-            |------ run_classifier.sh       # running this example
+            |--**-- run_classifier.sh       # running this example
             |------ *.1atp.pdb              # superposed PDB
             |------ kinfo_pdb.list          # superposed PDB list
             |------ kinfo_pdb.fasta         # alignment of PDB seq
@@ -203,7 +208,7 @@ columns = [ 'pdb_id',  'chain_id', 'pdb_length', 'uni_length', 'uni_id',
 ```
 > examples/
     |--3_run_classifier_only
-            |------ run_classifier_only.sh  # running this example
+            |--**-- run_classifier_only.sh  # running this example
             |------ test.SK_*_kinfo_classify.csv  # result
             |------ output.200224.csv       # kinase structural parameters
 ```
@@ -214,10 +219,11 @@ columns = [ 'pdb_id',  'chain_id', 'pdb_length', 'uni_length', 'uni_id',
 ```
 > examples/
     |--4_get_pdb_info
-            |------ run_get_pdb_info.sh    # running this example
-            |------ run_get_ligand_info.sh # running this example
+            |--**-- run_get_pdb_info.sh    # running this example
+            |--**-- run_get_ligand_info.sh # running this example
             |------ test.list              # list of PDB to extract data
             |------ test-sample.csv.gz     # sample PDB result, csv
+            |------ test-sample2.csv.gz    # sample PDB result2, csv
             |------ test-sample.xlsx       # sample PDBresult, xlsx
             |------ test-again.csv.gz      # sample ligand result, csv
             |------ test-again.xlsx        # sample ligand result, xlsx
@@ -236,6 +242,7 @@ columns = [ 'pdb_id',  'chain_id', 'pdb_length', 'uni_length', 'uni_id',
   muscle          # 3.8.31
 
   Python          # 3.6.8+
+    argparser     #
     biopython     # 1.72+
     pandas        # 0.24.2+
     numpy         # 1.16.2+
