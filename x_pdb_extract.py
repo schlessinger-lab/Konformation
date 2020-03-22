@@ -241,18 +241,29 @@ def CoordCorrect( missing, pdb_dir ):
     return dic
 
   # Read in correction file and load correction data into database
+  # Two formats possible:
+  # 1: input as list of PDB with name - correct.<type>.<pdb_name>
+  # 2: input as list of missing input - <pdb_name>|<type>|<seq>
   print(' \033[34m# "MISSRES" PDB list spplied: \033[0m'+missing)
   with open(missing, 'r') as fi:
     for l in fi:
-      pdb_name, typ, seq = l.split('|')
-      pdb_id = pdb_name.split('.')[0]
+      ## input format 2: missing input - <pdb_name>|<type>|<seq>
+      if re.search('\|', l):
+        pdb_name, typ, seq = l.split('|')
+        pdb_id = pdb_name.split('.')[0]
+      ## input format 1: files of correct.<type>.<pdb_name>
+      else:
+        tmp = l.split('.')
+        typ = tmp[1]
+        pdb_id = tmp[2]
+        pdb_name = re.sub('correct.{0}.'.format(typ), '', l).rstrip()
 
       for p_dir in pdb_dir.split(','):
         if not p_dir:
           continue
         if re.search(r'~', p_dir):
           sys.exit('\n  \033[31m#2# PDB FATAL:\033[0m Python does not recognize "~" home directory\n            Use full directory name: '+p_dir)
-        if os.path.isfile(p_dir+'/correct.'+typ+'.'+pdb_name):
+        if os.path.isfile(p_dir+'correct.'+typ+'.'+pdb_name):
           pdb = p_dir+'/correct.'+typ+'.'+pdb_name
       if pdb is None:
         print('# No correction for {0} : {1}'.format(pdb_id, typ))
@@ -266,7 +277,7 @@ def CoordCorrect( missing, pdb_dir ):
         resid   = res.get_id()[1]
         bb_crds, ca_crd, cg_crd, avg_crd, cb_crd, cd_crd = ResidueCoords( res )
         Residue.append( [ resname, resid, bb_crds, ca_crd, cg_crd, 
-                                          avg_crd, cb_crd ] )
+                                          avg_crd, cb_crd, cd_crd ] )
 
       # Put correction data into separated arrays,
       # [Helix, N-Dom, C-Dom, DFG_F, Gate, Rs1, Rs2, Rs3, Rs4, 

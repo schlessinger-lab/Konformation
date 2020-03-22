@@ -3,10 +3,10 @@
 from tqdm import tqdm
 from pathos import multiprocessing
 
-#from x_dfg_torsion import *
-from x_helix_axis  import Distance,SphericalAngles,ArrayCent,VectorAngle
-#from x_fasta_parse import *
-#from x_pdb_extract import *
+from x_helix_axis import Distance
+from x_helix_axis import ArrayCent
+from x_helix_axis import VectorAngle
+from x_helix_axis import SphericalAngles
 
 ##########################################################################
 ## Use MPI to run calculation of spherical angle and distance calculations 

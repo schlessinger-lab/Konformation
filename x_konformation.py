@@ -21,6 +21,7 @@
 ##########################################################################
 
 import sys,os
+import re
 from tqdm import tqdm
 from pathos import multiprocessing
 
@@ -147,24 +148,28 @@ def ParameterCalculations( parm, Query_PDB, Fasta_Lib, PDB_Data, output ):
                     g_seq=Gate_Seq,  f_seq=DFG_F_Seq, t_seq=Cs_Seq,
                     pdb_dir=pdb_dir, corr=CoordCorrect(missing, pdb_dir) )
 
-  if parm['MPICPU'][0] == 1:
-    Tmp  = [pPDB(pdb) for pdb in tqdm(Query_PDB)]
-  else:
-    if parm['MPICPU'][0] == 0:
-      mpi_cpu = multiprocessing.cpu_count()
-    else:
-      mpi_cpu = parm['MPICPU'][0]
-    mpi  = multiprocessing.Pool(mpi_cpu)
-    Tmp  = [x for x in tqdm(mpi.imap(pPDB,Query_PDB),total=len(Query_PDB))]
-    mpi.close()
-    mpi.join()
+  # Extract PDB data. Using MPI can slow down alot due to IO limit
+  Tmp  = [ pPDB(pdb) for pdb in tqdm(Query_PDB) ]
 
   # PDB_Coords = [pdb_name, H_Crds, N_Crds, C_Crds, G_Crds, F_Crds, T_Crds]
   PDB_Coords = [Itm for Itm in Tmp if Itm is not None]
 
   print('\n ## Input Query: {0} - Accepted: \033[31m{1}\033[0m\n'.format(
         len(Tmp), len(PDB_Coords)))
-  os.system('cat _TEMP.missing.* > '+output+'.missing.txt; rm _TEMP.missing.*')
+
+  ## Handle any structure that is flagged with missing data
+  missing = False
+  for File in os.listdir('.'):
+    if re.search('_TEMP.missing.', File):
+      missing = True
+      with open('_TEMP.missing-header.txt', 'w') as fo:
+        fo.write('## Recover missing residue coordinates if *middle* residue is available\n')
+        fo.write('## by saving residue coordinates in PDB format: correct.<domain>.<full_pdb_name>.pdb\n')
+        fo.write('## then rerun the script with modified input with updated MISSRES <new list filename>\n')
+        fo.write('##PDB_File|Missing_domain|residues\n')
+  if missing:
+    print('\033[31m## Check for missing structural data:\033[0m '+output+'.missing.txt')
+    os.system('cat _TEMP.missing-header.txt _TEMP.missing.* > '+output+'.missing.txt; rm _TEMP.missing.* _TEMP.missing-header*')
 
 
   # Compare reference and query PDB C-helix/N-dom/C-dom parameters

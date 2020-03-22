@@ -4,7 +4,6 @@ import sys,os,re
 import pandas as pd
 
 from Bio import SeqIO
-#from Bio.Seq import Seq
 from Bio.PDB import PDBIO
 from Bio.SeqRecord import SeqRecord
 from Bio.PDB.PDBParser import PDBParser
@@ -112,8 +111,8 @@ def BlastpPairwiseIdentity( rst_dir, mdl_prot_fasta, fasta_database ):
 
     for line in fi:
       Items = line.split('\t')
-      name, aa, identity, positive = ( Items[0].split('|')[0], int(Items[1]),
-                                        float(Items[2]), float(Items[3]) )
+      name, aa, identity, positive = (Items[0].split('/')[0].split('|')[0],
+                                      int(Items[1]), float(Items[2]), float(Items[3]) )
       if name in Ident:
         Ident[name].append( [name, aa, identity, positive] )
       else:
@@ -134,26 +133,22 @@ def BlastpPairwiseIdentity( rst_dir, mdl_prot_fasta, fasta_database ):
     Data.append( [name, length, (x/length), (y/length)] )
 
 ############################
-  # sort the dataset by percent identity or positive, then by available length,
-  # then by filename to prefer A or B, etc
+  # sort the dataset by percent identity or positive, then by available length
   pdata = pd.DataFrame(Data)
-  pdata.columns = ['kinase', 'length', 'identity', 'similarity']
+  pdata.columns = ['Kinase', 'Length', 'Identity', 'Similarity']
 
   # sort selection: percent identity then by length
-  pdata_temp = pdata.sort_values( by=['identity', 'length'], ascending=[False, False] )
+  pdata_temp = pdata.sort_values( by=['Identity', 'Length'], ascending=[False, False] )
   col = pdata_temp.columns.tolist()
   col = col[-1:] + col[:-1]
   pdata_temp = pdata_temp[col]
   pdata = pdata_temp
 
-  pdata.to_csv('{0}/{1}.idmat.sort.txt'.format( rst_dir, fasta_name.split('/')[-1]), 
-                sep='\t', encoding='utf-8', float_format='%4.2f', index=False )
+#  pdata.to_csv('{0}/{1}.idmat.sort.txt'.format( rst_dir, fasta_name.split('/')[-1]), 
+#                sep='\t', encoding='utf-8', float_format='%4.2f', index=False )
+  os.system('rm {0}/{1}.idmat.txt'.format(rst_dir, fasta_name.split('/')[-1]))
 
-  os.system('rm {0}/{1}.idmat.txt {0}/{1}.idmat.sort.txt'.format(rst_dir, fasta_name.split('/')[-1]))
-
-  Data = []
-  for idx, r in pdata.iterrows():
-    Data.append( [ r.kinase, r.length, r.identity, r.similarity ] )
+  Data = pdata[['Kinase','Length','Identity','Similarity']].iloc[:,:].to_numpy()
 
   return Data
 
@@ -205,7 +200,7 @@ def CacheSeqDatabase( fasta_file ):
 #  print('\n  \033[34m## Caching sequence database:\033[0m '+fasta_file+'\n')
   Database = {}
   for seq_record in SeqIO.parse(fasta_file, 'fasta'):
-    new_id = seq_record.id.split('|')[0].replace(':', '_')
+    new_id = seq_record.id.split('/')[0].split('|')[0].replace(':', '_')
     seq_record.description = ''
     seq_record.id = new_id
     Database[new_id] = seq_record
@@ -240,9 +235,6 @@ def FASTA_Gen( pdb_name, pdb_id ):
 ## https://www.dnastar.com/manuals/MegAlignPro/15.3/en/topic/muscle-alignment-options
 def MuscleProfileAlignment( profile_fasta, target_fasta, output_fasta ):
 
-  x = 'muscle -profile -in1 {0} -in2 {1} -out {2} -maxiters 64 -seqtype protein -gapopen -5.0 -gapextend -2.0 -center 0.0 -quiet'.format(
-              profile_fasta, target_fasta, output_fasta )
-#  print(x)
   os.system('muscle -profile -in1 {0} -in2 {1} -out {2} -maxiters 64 -seqtype protein -gapopen -5.0 -gapextend -2.0 -center 0.0 -quiet'.format(
               profile_fasta, target_fasta, output_fasta ))
 

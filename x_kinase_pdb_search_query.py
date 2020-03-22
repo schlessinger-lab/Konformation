@@ -68,13 +68,13 @@ def SearchRCSBWithQuery( key, search_query ):
   ## seach RCSB with query using requests
   response = requests.post(pdb_url, data=search_query, headers=header)
   if response.status_code == 200:
-    print("  > Found PDB entries matching query: \033[31m{} - {}\033[0m".format(key, len(response.text)))
+    print("  > Found PDB entries matching query: \033[31m{0} - {1}\033[0m".format(key, len(response.text)))
   else:
     sys.exit("\033[34m FATAL \033[0m- Failed to retrieve results")
 
   ## response.content will give a list of 4-letter PDB_ID
   pdb_id_list = sorted([i for i in response.content.decode().split('\n') if i != ''])
-  print('  > Parsed PDB entries that matches: \033[31m{}\033[0m'.format(len(pdb_id_list)))
+  print('  > Parsed PDB entries that matches: \033[31m{0}\033[0m'.format(len(pdb_id_list)))
 
   return pdb_id_list
 
@@ -83,6 +83,9 @@ def SearchRCSBWithQuery( key, search_query ):
 ## Check if the newly retreived PDB name already exists in internal library
 def ReadKnownKinaseList( list_name ):
   known_pdbs = {}
+  if list_name == 'None':
+    return known_pdbs
+
   with open(list_name, 'r') as fi:
     for l in fi:
       if l.rstrip() and not re.search('#', l):
@@ -92,6 +95,7 @@ def ReadKnownKinaseList( list_name ):
           known_pdbs[pdb_id] = [chain_id]
         else:
           known_pdbs[pdb_id].append(chain_id)
+  print('  > Found Known Kinase entries: \033[31m{0}\n - {1}\033[0m\n'.format(len(known_pdbs), list_name))
   return known_pdbs
 
 ## First open the known_pdb.list, check if query PDB is in known_pdb.list already
@@ -108,7 +112,7 @@ class DownloadNewPDB(object):
   def __call__( self, info ):
     return self.download_pdb( info )
 
-  def download_pdb( self,info ):
+  def download_pdb( self, info ):
     pdb_id, chain_id = info
 
     ## Check if atom has alternative position, if so, keep 'A' position and remove the flag
@@ -124,9 +128,10 @@ class DownloadNewPDB(object):
     ## BioPython downloads PDB but it gives a lowercase name in pdb{}.ent format
     biopdb_name = '{0}/pdb{1}.ent'.format(self.work_dir, pdb_id.lower())
     biopdb_modf = '{0}/pdb{1}.mod.ent'.format(self.work_dir, pdb_id.lower())
-    if not os.path.isfile(biopdb_name):
+    if not os.path.isfile(biopdb_modf):
       try:
-        PDB.PDBList(verbose=False).retrieve_pdb_file(pdb_id, pdir=self.work_dir, obsolete=False, file_format='pdb')
+        PDB.PDBList(verbose=False).retrieve_pdb_file(pdb_id, pdir=self.work_dir, 
+                                                obsolete=False, file_format='pdb')
       except FileNotFoundError:
         print('  \033[31m> ERROR: BioPython cannot download PDB: \033[0m'+pdb_id)
         return None

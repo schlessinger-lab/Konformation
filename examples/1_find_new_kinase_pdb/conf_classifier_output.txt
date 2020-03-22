@@ -1,0 +1,244 @@
+  [34m> Script directory:[0m /home/pmung/Dropbox/9_scripts/3_program/structures/4_Konformation/
+  [34m> Internal PDB directory:[0m /home/pmung/Dropbox/1_kinase/1_family/1_stdkinases/170109/2_align/
+  [34m> Reference kinase PDB:[0m /home/pmung/Dropbox/9_scripts/3_program/structures/4_Konformation/z_database/1ATP_E.pdb
+  [34m> Reference kinase residues:[0m resi 121-139+162-183
+  [34m> Output data prefix:[0m stdy_kinase_xtal.200321.conf
+[34m  ## CHECKPDB: Input PDB have been Pre-Checked for kinase domain ##[0m
+/home/pmung/Dropbox (Schlessinger lab)/9_scripts/3_program/structures/4_Konformation/examples/1_find_new_kinase_pdb/x_work
+
+ ** Input Target PDB: [31m12[0m
+
+[34m  ## SUPERPOSED: Input PDB have been Pre-Superposed to reference kinase ##[0m
+
+[34m  ## CHKALIGN: PDB have been Pre-Checked for non-kinases and Generated MSA Alignment ##[0m
+
+[34m  ## Run Konformation to calculate structural parameters ##[0m
+ ** Found number of aligned FASTA entries: [31m13[0m
+
+[34m### Extract reference PDB coordinates and parameters ###[0m
+>>>> Reference PDB: [31m1ATP_E[0m
+1ATP_E
+ reference sequence:	HTLNEKRIL
+ Column in Fasta:	416
+1ATP_E
+ reference sequence:	AMKIL
+ Column in Fasta:	372
+1ATP_E
+ reference sequence:	VTDFG
+ Column in Fasta:	1610
+1ATP_E
+ reference sequence:	TDFGF
+ Column in Fasta:	1611
+1ATP_E
+ reference sequence:	MVMEY
+ Column in Fasta:	697
+1ATP_E
+ reference sequence:	EKRIL
+ Column in Fasta:	420
+1ATP_E
+ reference sequence:	HYAMK
+ Column in Fasta:	370
+1ATP_E
+ reference sequence:	IQVTD
+ Column in Fasta:	1608
+1ATP_E
+ reference sequence:	QVTDF
+ Column in Fasta:	1609
+
+[32m>>> Current PDB:[0m [33m1ATP_E[0m
+>> Query Sequence:	[33m1ATP_E[0m -	HTLNEKRIL
+ Matched sequence in	[33m1ATP_E[0m -[31m	87-HTLNEKRIL-95[0m
+>> Query Sequence:	[33m1ATP_E[0m -	AMKIL
+ Matched sequence in	[33m1ATP_E[0m -[31m	70-AMKIL-74[0m
+>> Query Sequence:	[33m1ATP_E[0m -	VTDFG
+ Matched sequence in	[33m1ATP_E[0m -[31m	182-VTDFG-186[0m
+>> Query Sequence:	[33m1ATP_E[0m -	TDFGF
+ Matched sequence in	[33m1ATP_E[0m -[31m	183-TDFGF-187[0m
+>> Query Sequence:	[33m1ATP_E[0m -	MVMEY
+ Matched sequence in	[33m1ATP_E[0m -[31m	118-MVMEY-122[0m
+
+ [34m# No "MISSRES" PDB list is not supplied[0m
+
+
+[32m>>> Current PDB:[0m [33m6I82_A[0m
+>> Query Sequence:	[33m6I82_A.1atp[0m -	DLLSEFNVL
+ Matched sequence in	[33m6I82_A.1atp[0m -[31m	771-DLLSEFNVL-779[0m
+>> Query Sequence:	[33m6I82_A.1atp[0m -	AVKML
+ Matched sequence in	[33m6I82_A.1atp[0m -[31m	756-AVKML-760[0m
+>> Query Sequence:	[33m6I82_A.1atp[0m -	ISDFG
+ Matched sequence in	[33m6I82_A.1atp[0m -[31m	890-ISDFG-894[0m
+>> Query Sequence:	[33m6I82_A.1atp[0m -	SDFGL
+ Matched sequence in	[33m6I82_A.1atp[0m -[31m	891-SDFGL-895[0m
+>> Query Sequence:	[33m6I82_A.1atp[0m -	LIMEY
+ Matched sequence in	[33m6I82_A.1atp[0m -[31m	802-LIMEY-806[0m
+
+[32m>>> Current PDB:[0m [33m6KZI_A[0m
+>> Query Sequence:	[33m6KZI_A.1atp[0m -	RVPMEVVLL
+ Matched sequence in	[33m6KZI_A.1atp[0m -[31m	85-RVPMEVVLL-93[0m
+>> Query Sequence:	[33m6KZI_A.1atp[0m -	AIKHV
+ Matched sequence in	[33m6KZI_A.1atp[0m -[31m	65-AIKHV-69[0m
+>> Query Sequence:	[33m6KZI_A.1atp[0m -	LIDFG
+ Matched sequence in	[33m6KZI_A.1atp[0m -[31m	184-LIDFG-188[0m
+>> Query Sequence:	[33m6KZI_A.1atp[0m -	IDFGS
+ Matched sequence in	[33m6KZI_A.1atp[0m -[31m	185-IDFGS-189[0m
+>> Query Sequence:	[33m6KZI_A.1atp[0m -	LILER
+ Matched sequence in	[33m6KZI_A.1atp[0m -[31m	118-LILER-122[0m
+
+[32m>>> Current PDB:[0m [33m6I83_A[0m
+>> Query Sequence:	[33m6I83_A.1atp[0m -	DLLSEFNVL
+ Matched sequence in	[33m6I83_A.1atp[0m -[31m	771-DLLSEFNVL-779[0m
+>> Query Sequence:	[33m6I83_A.1atp[0m -	AVKML
+ Matched sequence in	[33m6I83_A.1atp[0m -[31m	756-AVKML-760[0m
+>> Query Sequence:	[33m6I83_A.1atp[0m -	ISDFG
+ Matched sequence in	[33m6I83_A.1atp[0m -[31m	890-ISDFG-894[0m
+>> Query Sequence:	[33m6I83_A.1atp[0m -	SDFGL
+ Matched sequence in	[33m6I83_A.1atp[0m -[31m	891-SDFGL-895[0m
+>> Query Sequence:	[33m6I83_A.1atp[0m -	LIMEY
+ Matched sequence in	[33m6I83_A.1atp[0m -[31m	802-LIMEY-806[0m
+
+[32m>>> Current PDB:[0m [33m6TFP_A[0m
+>> Query Sequence:	[33m6TFP_A.1atp[0m -	EFIEEAKVM
+ Matched sequence in	[33m6TFP_A.1atp[0m -[31m	441-EFIEEAKVM-449[0m
+>> Query Sequence:	[33m6TFP_A.1atp[0m -	AIKMI
+ Matched sequence in	[33m6TFP_A.1atp[0m -[31m	428-AIKMI-432[0m
+>> Query Sequence:	[33m6TFP_A.1atp[0m -	VSDFG
+ Matched sequence in	[33m6TFP_A.1atp[0m -[31m	537-VSDFG-541[0m
+>> Query Sequence:	[33m6TFP_A.1atp[0m -	SDFGL
+ Matched sequence in	[33m6TFP_A.1atp[0m -[31m	538-SDFGL-542[0m
+>> Query Sequence:	[33m6TFP_A.1atp[0m -	IITEY
+ Matched sequence in	[33m6TFP_A.1atp[0m -[31m	472-IITEY-476[0m
+
+[32m>>> Current PDB:[0m [33m6U0K_A[0m
+>> Query Sequence:	[33m6U0K_A.1atp[0m -	VLKMEVAVL
+ Matched sequence in	[33m6U0K_A.1atp[0m -[31m	60-VLKMEVAVL-68[0m
+>> Query Sequence:	[33m6U0K_A.1atp[0m -	ALKVE
+ Matched sequence in	[33m6U0K_A.1atp[0m -[31m	48-ALKVE-52[0m
+>> Query Sequence:	[33m6U0K_A.1atp[0m -	MLDFG
+ Matched sequence in	[33m6U0K_A.1atp[0m -[31m	161-MLDFG-165[0m
+>> Query Sequence:	[33m6U0K_A.1atp[0m -	LDFGL
+ Matched sequence in	[33m6U0K_A.1atp[0m -[31m	162-LDFGL-166[0m
+>> Query Sequence:	[33m6U0K_A.1atp[0m -	VVMQL
+ Matched sequence in	[33m6U0K_A.1atp[0m -[31m	92-VVMQL-96[0m
+
+[32m>>> Current PDB:[0m [33m6VOV_A[0m
+>> Query Sequence:	[33m6VOV_A.1atp[0m -	ELLAEANVM
+ Matched sequence in	[33m6VOV_A.1atp[0m -[31m	416-ELLAEANVM-424[0m
+>> Query Sequence:	[33m6VOV_A.1atp[0m -	AVKIL
+ Matched sequence in	[33m6VOV_A.1atp[0m -[31m	400-AVKIL-404[0m
+>> Query Sequence:	[33m6VOV_A.1atp[0m -	ISDFG
+ Matched sequence in	[33m6VOV_A.1atp[0m -[31m	510-ISDFG-514[0m
+>> Query Sequence:	[33m6VOV_A.1atp[0m -	SDFGL
+ Matched sequence in	[33m6VOV_A.1atp[0m -[31m	511-SDFGL-515[0m
+>> Query Sequence:	[33m6VOV_A.1atp[0m -	LVMEM
+ Matched sequence in	[33m6VOV_A.1atp[0m -[31m	446-LVMEM-450[0m
+
+[32m>>> Current PDB:[0m [33m6QU2_A[0m
+>> Query Sequence:	[33m6QU2_A.1atp[0m -	QAQIEVRLL
+ Matched sequence in	[33m6QU2_A.1atp[0m -[31m	199-QAQIEVRLL-207[0m
+>> Query Sequence:	[33m6QU2_A.1atp[0m -	AIKII
+ Matched sequence in	[33m6QU2_A.1atp[0m -[31m	186-AIKII-190[0m
+>> Query Sequence:	[33m6QU2_A.1atp[0m -	IVDFG
+ Matched sequence in	[33m6QU2_A.1atp[0m -[31m	305-IVDFG-309[0m
+>> Query Sequence:	[33m6QU2_A.1atp[0m -	VDFGS
+ Matched sequence in	[33m6QU2_A.1atp[0m -[31m	306-VDFGS-310[0m
+>> Query Sequence:	[33m6QU2_A.1atp[0m -	LVFEM
+ Matched sequence in	[33m6QU2_A.1atp[0m -[31m	236-LVFEM-240[0m
+
+[32m>>> Current PDB:[0m [33m6QTY_A[0m
+>> Query Sequence:	[33m6QTY_A.1atp[0m -	AARSEIQVL
+ Matched sequence in	[33m6QTY_A.1atp[0m -[31m	202-AARSEIQVL-210[0m
+>> Query Sequence:	[33m6QTY_A.1atp[0m -	AVKIV
+ Matched sequence in	[33m6QTY_A.1atp[0m -[31m	189-AVKIV-193[0m
+>> Query Sequence:	[33m6QTY_A.1atp[0m -	VVDFG
+ Matched sequence in	[33m6QTY_A.1atp[0m -[31m	323-VVDFG-327[0m
+>> Query Sequence:	[33m6QTY_A.1atp[0m -	VDFGS
+ Matched sequence in	[33m6QTY_A.1atp[0m -[31m	324-VDFGS-328[0m
+>> Query Sequence:	[33m6QTY_A.1atp[0m -	IVFEL
+ Matched sequence in	[33m6QTY_A.1atp[0m -[31m	239-IVFEL-243[0m
+
+[32m>>> Current PDB:[0m [33m6VZH_A[0m
+>> Query Sequence:	[33m6VZH_A.1atp[0m -	PLFTELKFY
+ Matched sequence in	[33m6VZH_A.1atp[0m -[31m	79-PLFTELKFY-87[0m
+>> Query Sequence:	[33m6VZH_A.1atp[0m -	VVKVE
+ Matched sequence in	[33m6VZH_A.1atp[0m -[31m	69-VVKVE-73[0m
+>> Query Sequence:	[33m6VZH_A.1atp[0m -	LVDYG
+ Matched sequence in	[33m6VZH_A.1atp[0m -[31m	195-LVDYG-199[0m
+>> Query Sequence:	[33m6VZH_A.1atp[0m -	VDYGL
+ Matched sequence in	[33m6VZH_A.1atp[0m -[31m	196-VDYGL-200[0m
+>> Query Sequence:	[33m6VZH_A.1atp[0m -	MIMDR
+ Matched sequence in	[33m6VZH_A.1atp[0m -[31m	129-MIMDR-133[0m
+
+[32m>>> Current PDB:[0m [33m6Y6H_A[0m
+>> Query Sequence:	[33m6Y6H_A.1atp[0m -	EILHEIAVL
+ Matched sequence in	[33m6Y6H_A.1atp[0m -[31m	76-EILHEIAVL-84[0m
+>> Query Sequence:	[33m6Y6H_A.1atp[0m -	AAKFL
+ Matched sequence in	[33m6Y6H_A.1atp[0m -[31m	60-AAKFL-64[0m
+>> Query Sequence:	[33m6Y6H_A.1atp[0m -	IVDFG
+ Matched sequence in	[33m6Y6H_A.1atp[0m -[31m	177-IVDFG-181[0m
+>> Query Sequence:	[33m6Y6H_A.1atp[0m -	VDFGM
+ Matched sequence in	[33m6Y6H_A.1atp[0m -[31m	178-VDFGM-182[0m
+>> Query Sequence:	[33m6Y6H_A.1atp[0m -	LILEY
+ Matched sequence in	[33m6Y6H_A.1atp[0m -[31m	108-LILEY-112[0m
+
+[32m>>> Current PDB:[0m [33m6Y6F_A[0m
+>> Query Sequence:	[33m6Y6F_A.1atp[0m -	EILHEIAVL
+ Matched sequence in	[33m6Y6F_A.1atp[0m -[31m	76-EILHEIAVL-84[0m
+>> Query Sequence:	[33m6Y6F_A.1atp[0m -	AAKFL
+ Matched sequence in	[33m6Y6F_A.1atp[0m -[31m	60-AAKFL-64[0m
+>> Query Sequence:	[33m6Y6F_A.1atp[0m -	IVDFG
+ Matched sequence in	[33m6Y6F_A.1atp[0m -[31m	177-IVDFG-181[0m
+>> Query Sequence:	[33m6Y6F_A.1atp[0m -	VDFGM
+ Matched sequence in	[33m6Y6F_A.1atp[0m -[31m	178-VDFGM-182[0m
+>> Query Sequence:	[33m6Y6F_A.1atp[0m -	LILEY
+ Matched sequence in	[33m6Y6F_A.1atp[0m -[31m	108-LILEY-112[0m
+
+[32m>>> Current PDB:[0m [33m6UIP_A[0m
+>> Query Sequence:	[33m6UIP_A.1atp[0m -	QAQIEVRLL
+ Matched sequence in	[33m6UIP_A.1atp[0m -[31m	199-QAQIEVRLL-207[0m
+>> Query Sequence:	[33m6UIP_A.1atp[0m -	AIKII
+ Matched sequence in	[33m6UIP_A.1atp[0m -[31m	186-AIKII-190[0m
+>> Query Sequence:	[33m6UIP_A.1atp[0m -	IVDFG
+ Matched sequence in	[33m6UIP_A.1atp[0m -[31m	305-IVDFG-309[0m
+>> Query Sequence:	[33m6UIP_A.1atp[0m -	VDFGS
+ Matched sequence in	[33m6UIP_A.1atp[0m -[31m	306-VDFGS-310[0m
+>> Query Sequence:	[33m6UIP_A.1atp[0m -	LVFEM
+ Matched sequence in	[33m6UIP_A.1atp[0m -[31m	236-LVFEM-240[0m
+
+ ## Input Query: 12 - Accepted: [31m12[0m
+
+[31m## Check for missing structural data:[0m stdy_kinase_xtal.200321.conf.missing.txt
+##################################################################
+
+
+ ## Helix Axis return: 12
+
+##################################################################
+
+
+  #1# Domain -- N-lobe residue missing CG: 6VZH_A
+
+  #1# Domain -- N-lobe residue missing CG: 6VZH_A
+
+ ## Domain Distances return: 12
+
+##################################################################
+
+
+ ## DFG-motif Vector return: 12
+
+
+#########################################
+
+[34m## Loading trained SK ML models... [31mnn[0m
+ [34mSK_RF Classify DFG:[0m   0.003597 s
+ [34mSK_RF Classify Kinfo:[0m 0.003569 s
+ [34mAppend Kinfo data:[0m    0.013249 s
+
+[34mConformation   Counts[0m
+[35m     cidi	[31m12[0m
+[35m     codi	[31m1[0m
+
+[34m Write to:[0m stdy_kinase_xtal.200321.conf.SK_nn_kinfo_classify.csv
+
+#########################################
+

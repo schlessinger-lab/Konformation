@@ -2,6 +2,7 @@
 
 
 import numpy as np
+
 from tqdm import tqdm
 from pathos import multiprocessing
 
@@ -16,7 +17,7 @@ np.seterr(invalid='ignore')
 def DFGTorsionAngle( Ref_Coords, Tgt_Coords, Data, parm, output ):
 
   # Input_Coords = [pdb_name, H_Crds, N_Crds, C_Crds, G_Crds, R_Crds, T_Crds]
-  #     x_Coords = [resname, resid, bb_crds, ca_crd, cg_crd, avg_crd, cb_crd] 
+  #     x_Coords = [resname, resid, bb_crds, ca_crd, cg_crd, avg_crd, cb_crd 
   #                 sc_vector]  
 
   print('##################################################################\n')
@@ -101,7 +102,7 @@ def ExportDFGMeasure( Ref, Tgt_List, Data, output ):
 ##
 def DFGTorsions( Input ):
   # Input_Coords = [pdb_name, H_Crds, N_Crds, C_Crds, G_Crds, F_Crds, T_Crds]
-  #     x_Coords = [resname, resid, bb_crds, ca_crd, cg_crd, avg_crd, cb_crd] 
+  #     x_Coords = [resname, resid, bb_crds, ca_crd, cg_crd, avg_crd, cb_crd, cd_crd] 
   pdb_name, D_Coords, F_Coords = Input[0], Input[3], Input[5]
 
   # Check for missing DFG-D or DFG-F residue

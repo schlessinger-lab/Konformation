@@ -23,14 +23,14 @@ def HelixMeasurements( Ref_Coords, Tgt_Coords, Data, parm, output ):
   Ref = HelixAxis(Ref_Coords)
 
   if parm['MPICPU'][0] == 1:
-    Tmp = [ HelixAxis(Tgt) for Tgt in Tgt_Coords ]
+    Tmp = [ HelixAxis(Tgt) for Tgt in tqdm(Tgt_Coords) ]
   else:
     if parm['MPICPU'][0] == 0:
       mpi_cpu = multiprocessing.cpu_count()
     else:
       mpi_cpu = parm['MPICPU'][0]
     mpi   = multiprocessing.Pool(mpi_cpu)
-    Tmp = [x for x in tqdm(mpi.imap_unordered(HelixAxis, Tgt_Coords), total=len(Tgt_Coords))]
+    Tmp = [x for x in tqdm(mpi.imap(HelixAxis, Tgt_Coords), total=len(Tgt_Coords))]
     mpi.close()
     mpi.join()
 
@@ -94,7 +94,7 @@ def HelixAxis( Input ):
 
   # Check for missing residues
   if Pre_Coords is None:
-    print('  # Helix Warning: Too short to calculate: \033[31m{0}]033[0m'.format(pdb_id))
+    print('  # Helix Warning: Too short to calculate: \033[31m{0}\033[0m'.format(pdb_id))
     return None_Coord
   for idx, Seq in enumerate(Pre_Coords):
     if Seq is None:

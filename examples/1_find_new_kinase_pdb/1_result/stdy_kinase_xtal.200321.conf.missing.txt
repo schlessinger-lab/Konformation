@@ -1,0 +1,4 @@
+## Recover missing residue coordinates if *middle* residue is available
+## by saving residue coordinates in PDB format: correct.<domain>.<full_pdb_name>.pdb
+## then rerun the script with modified input with updated MISSRES <new list filename>
+##PDB_File|Missing_domain|residues

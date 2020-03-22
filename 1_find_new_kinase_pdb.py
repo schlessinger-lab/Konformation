@@ -79,7 +79,7 @@ def main():
     print('\n  \033[34m## Reading in Parameter file ##\033[0m')
 
   if args.use_pdb:
-    new_pdb_ids = pd.read_csv(args.use_pdb, comment='#', header=None, sep='\s+').iloc[:,:].values.tolist()
+    new_pdb_ids = pd.read_csv(args.use_pdb, comment='#', header=None, sep='\s+').iloc[:,:].to_numpy()
     print('\n  \033[34m## Work with a list of pre-supplied PDB: \033[31m{}\033[0m'.format(len(new_pdb_ids)))
   else:
     new_pdb_ids = None
@@ -106,7 +106,7 @@ def main():
       non_kinase = pd.DataFrame([], columns=['pdb_idx'])
   else:
     non_kinase = pd.DataFrame([], columns=['pdb_idx'])
-  print('  > Found Known Non-Kinase entries: \033[31m{}\033[0m'.format(len(non_kinase)))
+  print('  > Found Known Non-Kinase entries: \033[31m{0}\n - {1}\033[0m\n'.format(len(non_kinase), read_nonkinase))
 
 
   ## Look for previously checked PDBs from the query list
@@ -119,7 +119,7 @@ def main():
       checked_df = pd.DataFrame([], columns=['pdb_id'])
   else:
     checked_df = pd.DataFrame([], columns=['pdb_id'])
-  print('\n  > Found checked-kinase entries: \033[31m{}\033[0m'.format(len(checked_df)))
+  print('  > Found checked-kinase entries: \033[31m{0}\n - {1}\033[0m\n'.format(len(checked_df), read_checked))
 
 
 ################################################################
@@ -180,6 +180,12 @@ def main():
     new_pdb_ids, nonkin_seq_df = CheckKinaseSeqIdentity( uniq_f_df, parms['KINOMEDB'], len_cutoff, idt_cutoff, outpref )
     print('  > Found kinase seq: \033[31m{0}/{1}\033[0m'.format(len(new_pdb_ids), len(uniq_f_df)))
 
+    ## write out all updated kinase structures (pdb_id, chain_id)
+    with open(parms['WTNEWKNOWN'], 'w') as fo:
+      for i in new_pdb_ids:
+        fo.write('{0} {1}\n'.format(i[0], i[1]))
+
+
     ## collect all non_kinases and write it out for future reference
     nonkin_df = pd.concat( [non_kinase, raw_f_df[ raw_f_df.length <= len_cutoff ], nonkin_seq_df ], sort=True).drop_duplicates(subset='pdb_idx')
     nonkin_df.pdb_id = nonkin_df.pdb_idx.apply(lambda x: x.split('_')[0])
@@ -213,7 +219,7 @@ def main():
 
   ## write out all updated + exisitng kinase structures (with output extension)
   print('\n  \033[34m## Finalize all results ##\033[0m')
-  with open(parms['WTNEWKNOWN'], 'w') as fo:
+  with open(parms['WTALLKNOWN'], 'w') as fo:
     for i in sorted(known_pdbs.keys()):
       for chain in known_pdbs[i]:
         fo.write('{0}_{1}.{2}\n'.format(i, chain, parms['OUTEXT']))
@@ -249,10 +255,25 @@ def main():
 
 
 #####################################
+#  sys.exit()
   ## Superpose new PDBs to 1ATP C-lobe
-  print('\n  \033[34m## Superposing all PDB structure with extension \033[31m{}\033[0m \033[34m##\033[0m'.format(parms['OUTEXT']))
-  SuperposePDB( parms['PYMOL'],  parms['REFPDB'], raw_pdbs, None, 
-                parms['OUTEXT'], parms['REFRES'], outpref )
+  ## limit 500 structures per pymol session to avoid overflow the memory
+  step = 500
+  if len(raw_pdbs) > step:
+    a = 0
+    for idx, i in enumerate(range(step, len(raw_pdbs)+step, step)):
+      if i > len(raw_pdbs):
+        i = len(raw_pdbs)
+        print('\n  \033[34m## Superposing all PDB structure with extension \033[31m{0}.{1}\033[0m \033[34m##\033[0m'.format(idx, parms['OUTEXT']))
+        SuperposePDB( parms['PYMOL'],  parms['REFPDB'], raw_pdbs[a:i], None,
+                      parms['OUTEXT'], parms['REFRES'], 
+                      outpref+'.'+str(idx+1) )
+        a += i
+
+  else:
+    print('\n  \033[34m## Superposing all PDB structure with extension \033[31m{}\033[0m \033[34m##\033[0m'.format(parms['OUTEXT']))
+    SuperposePDB( parms['PYMOL'],  parms['REFPDB'], raw_pdbs, None, 
+                  parms['OUTEXT'], parms['REFRES'], outpref )
 
 
 ##########################################################################################
@@ -260,7 +281,7 @@ def cmdlineparse():
   p = ArgumentParser(description="command line arguments")
 
   p.add_argument('-set', action='store_true', help='Print out Parameter file used by "-r"')
-  p.add_argument('-r', dest='read_param', required=True,
+  p.add_argument('-r', dest='read_param', required=False,
                   help='Read in Parameter file, search RCSB PDB for kinases')
   p.add_argument('-p', dest='use_pdb', required=False,
                   help='List of kinases to download directly (format: pdb_id\tchain_id)')

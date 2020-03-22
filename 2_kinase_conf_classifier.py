@@ -89,7 +89,7 @@ def main( param_list ):
   # regenerate PDB and repopulate target PDB list with chain_id
   if parm['CHECKPDB'][0]:
     print('\033[31m  ## CHECKPDB: Input PDB List have NOT been checked for kinase domain. Checking... ##\033[0m')
-    Temp1 = pd.read_csv(hom_dir+'/'+parm['PDBLIST'][0], sep='\s+', header=None, comment='#').iloc[:,0].values.tolist()
+    Temp1 = pd.read_csv(parm['PDBLIST'][0], sep='\s+', header=None, comment='#').iloc[:,0].values.tolist()
 
     if parm['MPICPU'][0] == 1:
       Temp2 = [CheckInputStructures(pdb) for pdb in tqdm(Temp1)]
@@ -107,7 +107,7 @@ def main( param_list ):
   else:
     print('\033[34m  ## CHECKPDB: Input PDB have been Pre-Checked for kinase domain ##\033[0m')
     print(os.getcwd())
-    Temp = pd.read_csv(hom_dir+'/'+parm['PDBLIST'][0], header=None, comment='#', sep='\s+').iloc[:,0].to_numpy()
+    Temp = pd.read_csv(parm['PDBLIST'][0], header=None, comment='#', sep='\s+').iloc[:,0].to_numpy()
     Targets = [ pdb_dir+'/'+pdb for pdb in Temp ]
 
   print('\n ** Input Target PDB: \033[31m{0}\033[0m'.format(len(Targets)))
@@ -117,14 +117,15 @@ def main( param_list ):
   # check if PDB has been superposed to 1ATP; if not, superpose and rename
   if parm['SUPERPOSED'][0]:
     print('\n\033[34m  ## SUPERPOSED: Input PDB have been Pre-Superposed to reference kinase ##\033[0m')
-    for pdb in Targets:
-      copy2(pdb, rst_dir)
+    for pdb in tqdm(Targets):
+      if not os.path.isfile(pdb):
+        copy2(pdb, rst_dir)
   else:
     print('\n\033[31m  ## SUPERPOSED: Input PDB have NOT been Pre-Superposed to reference kinase. Superposing... ##\033[0m')
     SuperposePDB( parm['PYMOL'][0], parm['REFPDB'][0], Targets, 'pdb', 
                   outext, parm['REFRES'][0], output_prefix )
     Temps = []
-    for pdb in Targets:
+    for pdb in tqdm(Targets):
       Temps.append('{0}/{1}.{2}'.format(tmp_dir,pdb.split('/')[-1].split('.')[0],outext))
       copy2('{0}/{1}.{2}'.format(tmp_dir,pdb.split('/')[-1].split('.')[0],outext), rst_dir)
 #      Temps.append(tmp_dir+'/'+pdb.split('/')[-1].split('.')[0]+'.'+outext)
@@ -149,10 +150,9 @@ def main( param_list ):
       Temps = [ oAlign(pdb) for pdb in tqdm(Targets) ]
     else:
       if parm['MPICPU'][0] == 0:
-        mpi_cpu = multiprocessing.cpu_count()
+        mpi = multiprocessing.Pool()
       else:
-        mpi_cpu = parm['MPICPU'][0]
-      mpi   = multiprocessing.Pool(mpi_cpu)
+        mpi   = multiprocessing.Pool(parm['MPICPU'][0])
       Temps = [x for x in tqdm(mpi.imap(oAlign, Targets),total=len(Targets))]
       mpi.close()
       mpi.join()
@@ -172,7 +172,7 @@ def main( param_list ):
     parm['PDBDIR'][0] = tmp_dir
   else:
     print('\n\033[34m  ## CHKALIGN: PDB have been Pre-Checked for non-kinases and Generated MSA Alignment ##\033[0m')
-    parm['FASTA'][0] = hom_dir+'/'+parm['PDBALIGN'][0]
+    parm['FASTA'][0] = parm['PDBALIGN'][0]
 
   ## Move to result directory to use data there to calculate conformation
   os.chdir(rst_dir)

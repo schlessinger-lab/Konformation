@@ -16,7 +16,8 @@ def DefaultVariables():
     'RDNONKIN':  ['check_kinase.200220.non_kinase.list','# Read from a List of PDBs that has no kinase catalytic domain'],
     'RDCHECKED': ['check_kinase.200220.checked_pdb.list', '# Read from a List of any PDB that have been checked previously to skip redundant checks'],
 
-    'WTNEWKNOWN':['all_downloaded_kinase_pdb.NEWEST.list','# Write to List of newly found kinase structures, including KNOWNLIST'],
+    'WTNEWKNOWN':['new_downloaded_kinase_pdb.NEWEST.list','# Write to List of newly found kinase structures only'],
+    'WTALLKNOWN':['all_downloaded_kinase_pdb.NEWEST.list','# Write to List of newly found kinase structures, including KNOWNLIST'],
     'WTNONKIN':  [outpref+'.non_kinase.list','# Write to a List of PDBs that has no kinase catalytic domain'],
     'WTCHECKED': [outpref+'.checked_pdb.list', '# Write to a List of PDB that have been checked for kinase domain'],
 
